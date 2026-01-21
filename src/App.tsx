@@ -92,15 +92,13 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
           email: formData.email,
           phone: formData.phone,
           propertyInterest: "Browne's Addition Apartment",
-          moveInDate: formData.tourDate,
           message: formData.tourTime
             ? `Preferred tour time: ${formData.tourTime}. ${formData.message}`
-            : formData.message,
+            : formData.message || null,
           source: 'schedule-a-tour-form',
           companyId: '322039f9-b67b-4084-b806-387ba26c4810'
         })
