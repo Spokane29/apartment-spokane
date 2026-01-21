@@ -88,7 +88,7 @@ function App() {
     setSubmitError('')
 
     try {
-      const response = await fetch('/api/submit-lead', {
+      const response = await fetch('https://www.leasingvoice.com/api/leads/external', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -101,7 +101,8 @@ function App() {
           message: formData.tourTime
             ? `Preferred tour time: ${formData.tourTime}. ${formData.message}`
             : formData.message,
-          source: 'schedule-a-tour-form'
+          source: 'schedule-a-tour-form',
+          companyId: '322039f9-b67b-4084-b806-387ba26c4810'
         })
       })
 
