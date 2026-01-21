@@ -88,7 +88,7 @@ function App() {
     setSubmitError('')
 
     try {
-      const response = await fetch('https://leasingvoice.com/api/leads/external', {
+      const response = await fetch('/api/submit-lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
