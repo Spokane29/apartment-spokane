@@ -96,13 +96,12 @@ function App() {
           lastName: formData.lastName,
           email: formData.email,
           phone: formData.phone,
-          propertyInterest: "Browne's Addition Apartment - 104 S Oak St",
+          propertyInterest: "Browne's Addition Apartment",
           moveInDate: formData.tourDate,
           message: formData.tourTime
             ? `Preferred tour time: ${formData.tourTime}. ${formData.message}`
             : formData.message,
-          source: 'apartment-spokane-tour-form',
-          companyId: 'apartment-spokane'
+          source: 'schedule-a-tour-form'
         })
       })
 
