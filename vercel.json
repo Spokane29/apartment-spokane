@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build && cd ../admin && npm install && npm run build && mkdir -p ../frontend/dist/admin && cp -r dist/* ../frontend/dist/admin/",
-  "outputDirectory": "frontend/dist",
+  "buildCommand": "npm run build && cd admin && npm install && npm run build && mkdir -p ../dist/admin && cp -r dist/* ../dist/admin/",
+  "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },

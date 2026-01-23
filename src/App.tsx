@@ -1,32 +1,27 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
+import ChatWidget from '@/components/chat/ChatWidget'
 import {
   Phone,
-  Mail,
   MapPin,
   Bed,
   Bath,
   Square,
   DollarSign,
   Check,
-  Star,
-  Clock,
   Shield,
   PawPrint,
   Car,
   Wifi,
   TreeDeciduous,
-  Send,
   ChevronLeft,
   ChevronRight,
   X,
   Calendar,
   Sparkles,
+  MessageCircle,
 } from 'lucide-react'
 
 // Property images
@@ -66,60 +61,17 @@ const amenities = [
 function App() {
   const [currentImage, setCurrentImage] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    tourDate: '',
-    tourTime: '',
-    message: '',
-  })
-  const [formSubmitted, setFormSubmitted] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState('')
+  const [chatOpen, setChatOpen] = useState(false)
 
   const nextImage = () => setCurrentImage((prev) => (prev + 1) % propertyImages.length)
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + propertyImages.length) % propertyImages.length)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setSubmitError('')
-
-    try {
-      const response = await fetch('https://www.leasingvoice.com/api/leads/external', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          propertyInterest: "Browne's Addition Apartment",
-          message: formData.tourTime
-            ? `Preferred tour time: ${formData.tourTime}. ${formData.message}`
-            : formData.message || null,
-          source: 'schedule-a-tour-form',
-          companyId: '322039f9-b67b-4084-b806-387ba26c4810'
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to submit form')
-      }
-
-      setFormSubmitted(true)
-    } catch (error) {
-      console.error('Form submission error:', error)
-      setSubmitError('Something went wrong. Please try again or call us directly.')
-    } finally {
-      setIsSubmitting(false)
+  const openChat = () => {
+    // Trigger the chat widget to open
+    const chatBubble = document.querySelector('.chat-bubble') as HTMLButtonElement
+    if (chatBubble && !chatBubble.classList.contains('chat-bubble--open')) {
+      chatBubble.click()
     }
-  }
-
-  const scrollToForm = () => {
-    document.getElementById('contact-form')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
@@ -247,129 +199,43 @@ function App() {
                 </div>
               </div>
 
-              {/* Right: Contact Form (Sticky on desktop) */}
+              {/* Right: Chat CTA (Sticky on desktop) */}
               <div className="lg:col-span-2">
                 <div className="lg:sticky lg:top-14" id="contact-form">
                   <Card className="shadow-lg border border-primary/20">
                     <div className="bg-primary text-white p-2.5 rounded-t-lg">
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4" />
-                        <h3 className="font-bold text-sm">Schedule a Tour</h3>
+                        <MessageCircle className="w-4 h-4" />
+                        <h3 className="font-bold text-sm">Chat with Sona</h3>
                       </div>
                       <p className="text-primary-foreground/80 text-[11px]">
                         Get $400 off when you move in by Feb 1st!
                       </p>
                     </div>
-                    <CardContent className="p-3">
-                      {formSubmitted ? (
-                        <div className="text-center py-4">
-                          <div className="bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <Check className="w-6 h-6 text-green-600" />
-                          </div>
-                          <h4 className="text-base font-bold text-foreground mb-1">Thank You!</h4>
-                          <p className="text-muted-foreground text-xs">
-                            We'll contact you within 24 hours.
+                    <CardContent className="p-4">
+                      <div className="text-center space-y-3">
+                        <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                          <MessageCircle className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                          <h4 className="text-base font-bold text-foreground mb-1">Have Questions?</h4>
+                          <p className="text-muted-foreground text-xs mb-3">
+                            Chat with Sona, our AI assistant! Ask about availability, pricing, pet policy, or schedule a tour.
                           </p>
                         </div>
-                      ) : (
-                        <form onSubmit={handleSubmit} className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label htmlFor="firstName" className="text-xs">First Name *</Label>
-                              <Input
-                                id="firstName"
-                                placeholder="John"
-                                required
-                                className="h-8 text-sm"
-                                value={formData.firstName}
-                                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="lastName" className="text-xs">Last Name *</Label>
-                              <Input
-                                id="lastName"
-                                placeholder="Doe"
-                                required
-                                className="h-8 text-sm"
-                                value={formData.lastName}
-                                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <Label htmlFor="email" className="text-xs">Email *</Label>
-                            <Input
-                              id="email"
-                              type="email"
-                              placeholder="john@example.com"
-                              required
-                              className="h-8 text-sm"
-                              value={formData.email}
-                              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            />
-                          </div>
-
-                          <div>
-                            <Label htmlFor="phone" className="text-xs">Phone *</Label>
-                            <Input
-                              id="phone"
-                              type="tel"
-                              placeholder="(509) 555-1234"
-                              required
-                              className="h-8 text-sm"
-                              value={formData.phone}
-                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            />
-                          </div>
-
-                          <div>
-                            <Label htmlFor="message" className="text-xs">Message (optional)</Label>
-                            <Textarea
-                              id="message"
-                              placeholder="Any questions?"
-                              rows={2}
-                              className="text-sm resize-none"
-                              value={formData.message}
-                              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                            />
-                          </div>
-
-                          {submitError && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-2 rounded">
-                              {submitError}
-                            </div>
-                          )}
-
-                          <Button
-                            type="submit"
-                            className="w-full h-9 text-sm font-semibold shadow-md"
-                            disabled={isSubmitting}
-                          >
-                            {isSubmitting ? (
-                              <>
-                                <span className="animate-spin mr-1">⏳</span>
-                                Submitting...
-                              </>
-                            ) : (
-                              <>
-                                <Send className="w-3.5 h-3.5 mr-1.5" />
-                                Schedule Tour
-                              </>
-                            )}
-                          </Button>
-
-                          <p className="text-[10px] text-center text-muted-foreground leading-tight">
-                            By submitting, you consent to contact by phone, SMS, or email.{' '}
-                            <Link to="/privacy" className="underline">Privacy</Link> |{' '}
-                            <Link to="/terms" className="underline">Terms</Link>
-                          </p>
-                        </form>
-                      )}
+                        <Button
+                          onClick={openChat}
+                          className="w-full h-10 text-sm font-semibold shadow-md"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          Start Chat
+                        </Button>
+                        <p className="text-muted-foreground text-xs">
+                          Or call us: <a href="tel:8886130442" className="text-primary font-semibold hover:underline">(888) 613-0442</a>
+                        </p>
+                      </div>
                     </CardContent>
                   </Card>
-
                 </div>
               </div>
             </div>
@@ -423,7 +289,8 @@ function App() {
           <div className="border-t border-border pt-2 text-center text-[10px] text-muted-foreground">
             <p>&copy; {new Date().getFullYear()} Apartment-Spokane.com |{' '}
               <Link to="/privacy" className="hover:text-primary">Privacy</Link> |{' '}
-              <Link to="/terms" className="hover:text-primary">Terms</Link>
+              <Link to="/terms" className="hover:text-primary">Terms</Link> |{' '}
+              <a href="/admin/" className="hover:text-primary">Admin</a>
             </p>
           </div>
         </div>
@@ -484,13 +351,16 @@ function App() {
             <a href="tel:8886130442" className="bg-green-600 text-white p-2 rounded">
               <Phone className="w-4 h-4" />
             </a>
-            <Button onClick={scrollToForm} size="sm" className="shadow text-xs h-8">
-              <Calendar className="w-3.5 h-3.5 mr-1" />
-              Tour
+            <Button onClick={openChat} size="sm" className="shadow text-xs h-8">
+              <MessageCircle className="w-3.5 h-3.5 mr-1" />
+              Chat
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Chat Widget */}
+      <ChatWidget />
 
     </div>
   )
