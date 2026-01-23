@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
   try {
     const { data: config } = await supabase.from('ai_config').select('greeting_message').single();
-    const greeting = config?.greeting_message || "Hi! I'm Sona, the virtual assistant for South Oak Apartments. How can I help you today?";
+    const greeting = config?.greeting_message || "Hi! I'm the virtual assistant for South Oak Apartments. How can I help you today?";
     const sessionId = crypto.randomUUID();
 
     res.json({ message: greeting, sessionId });
