@@ -65,8 +65,8 @@ function App() {
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + propertyImages.length) % propertyImages.length)
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sticky Header */}
+    <div className="min-h-screen bg-background pt-[52px] md:pt-[58px]">
+      {/* Fixed Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border/50 shadow-sm">
         <div className="w-full max-w-6xl mx-auto px-3 py-2 flex items-center justify-between">
           <div>
@@ -79,9 +79,6 @@ function App() {
           </a>
         </div>
       </header>
-
-      {/* Spacer for fixed header */}
-      <div className="h-[52px] md:h-[58px]"></div>
 
       {/* Urgency Banner */}
       <div className="bg-gradient-to-r from-primary via-primary/90 to-primary text-white py-2 md:py-2.5 px-3 overflow-hidden">
@@ -194,7 +191,7 @@ function App() {
 
               {/* Right: Embedded Chat (Sticky on desktop) */}
               <div className="lg:col-span-2">
-                <div className="lg:sticky lg:top-28" id="contact-form">
+                <div className="lg:sticky lg:top-[68px]" id="contact-form">
                   <Card className="shadow-lg border border-primary/20 overflow-hidden">
                     <div className="bg-primary text-white p-2.5">
                       <div className="flex items-center gap-1.5">
