@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import ChatWidget from '@/components/chat/ChatWidget'
+import EmbeddedChat from '@/components/chat/EmbeddedChat'
 import {
   Phone,
   MapPin,
@@ -61,18 +60,9 @@ const amenities = [
 function App() {
   const [currentImage, setCurrentImage] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
 
   const nextImage = () => setCurrentImage((prev) => (prev + 1) % propertyImages.length)
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + propertyImages.length) % propertyImages.length)
-
-  const openChat = () => {
-    // Trigger the chat widget to open
-    const chatBubble = document.querySelector('.chat-bubble') as HTMLButtonElement
-    if (chatBubble && !chatBubble.classList.contains('chat-bubble--open')) {
-      chatBubble.click()
-    }
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -199,11 +189,11 @@ function App() {
                 </div>
               </div>
 
-              {/* Right: Chat CTA (Sticky on desktop) */}
+              {/* Right: Embedded Chat (Sticky on desktop) */}
               <div className="lg:col-span-2">
                 <div className="lg:sticky lg:top-14" id="contact-form">
-                  <Card className="shadow-lg border border-primary/20">
-                    <div className="bg-primary text-white p-2.5 rounded-t-lg">
+                  <Card className="shadow-lg border border-primary/20 overflow-hidden">
+                    <div className="bg-primary text-white p-2.5">
                       <div className="flex items-center gap-1.5">
                         <MessageCircle className="w-4 h-4" />
                         <h3 className="font-bold text-sm">Chat with Sona</h3>
@@ -212,28 +202,11 @@ function App() {
                         Get $400 off when you move in by Feb 1st!
                       </p>
                     </div>
-                    <CardContent className="p-4">
-                      <div className="text-center space-y-3">
-                        <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-                          <MessageCircle className="w-8 h-8 text-primary" />
-                        </div>
-                        <div>
-                          <h4 className="text-base font-bold text-foreground mb-1">Have Questions?</h4>
-                          <p className="text-muted-foreground text-xs mb-3">
-                            Chat with Sona, our AI assistant! Ask about availability, pricing, pet policy, or schedule a tour.
-                          </p>
-                        </div>
-                        <Button
-                          onClick={openChat}
-                          className="w-full h-10 text-sm font-semibold shadow-md"
-                        >
-                          <MessageCircle className="w-4 h-4 mr-2" />
-                          Start Chat
-                        </Button>
-                        <p className="text-muted-foreground text-xs">
-                          Or call us: <a href="tel:8886130442" className="text-primary font-semibold hover:underline">(888) 613-0442</a>
-                        </p>
-                      </div>
+                    <CardContent className="p-3">
+                      <EmbeddedChat />
+                      <p className="text-muted-foreground text-xs text-center mt-2">
+                        Or call us: <a href="tel:8886130442" className="text-primary font-semibold hover:underline">(888) 613-0442</a>
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -351,16 +324,13 @@ function App() {
             <a href="tel:8886130442" className="bg-green-600 text-white p-2 rounded">
               <Phone className="w-4 h-4" />
             </a>
-            <Button onClick={openChat} size="sm" className="shadow text-xs h-8">
-              <MessageCircle className="w-3.5 h-3.5 mr-1" />
+            <a href="#contact-form" className="bg-primary text-white p-2 rounded flex items-center gap-1 text-xs font-medium">
+              <MessageCircle className="w-3.5 h-3.5" />
               Chat
-            </Button>
+            </a>
           </div>
         </div>
       </div>
-
-      {/* Chat Widget */}
-      <ChatWidget />
 
     </div>
   )
