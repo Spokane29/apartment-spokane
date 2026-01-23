@@ -13,14 +13,17 @@ export default function EmbeddedChat() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     initChat()
   }, [])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Scroll only within the chat container, not the whole page
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [messages, isLoading])
 
   const initChat = async () => {
@@ -72,7 +75,7 @@ export default function EmbeddedChat() {
 
   return (
     <div className="embedded-chat">
-      <div className="embedded-chat-messages">
+      <div className="embedded-chat-messages" ref={messagesContainerRef}>
         {messages.map(msg => (
           <div key={msg.id} className={`embedded-msg embedded-msg--${msg.role}`}>
             {msg.role === 'assistant' && <div className="embedded-msg-avatar">S</div>}
@@ -91,7 +94,6 @@ export default function EmbeddedChat() {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       <form className="embedded-chat-input" onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
