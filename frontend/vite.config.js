@@ -14,19 +14,5 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    lib: {
-      entry: 'src/index.jsx',
-      name: 'SouthOakChat',
-      fileName: 'south-oak-chat',
-    },
-    rollupOptions: {
-      external: ['react', 'react-dom'],
-      output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
-        },
-      },
-    },
   },
 });
