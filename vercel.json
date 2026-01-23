@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build && cd admin && npm install && npm run build && mkdir -p ../dist/admin && cp -r dist/* ../dist/admin/",
+  "buildCommand": "npx vite build && cd admin && npm install && npm run build && mkdir -p ../dist/admin && cp -r dist/* ../dist/admin/",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
