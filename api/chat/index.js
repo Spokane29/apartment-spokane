@@ -8,16 +8,12 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 const sessions = new Map();
 
 async function buildSystemPrompt() {
-  const [{ data: knowledgeBase }, { data: aiConfig }] = await Promise.all([
-    supabase.from('knowledge_base').select('*').order('category'),
-    supabase.from('ai_config').select('*').single(),
-  ]);
+  const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
 
-  const assistantName = aiConfig?.assistant_name || 'Sona';
   const personalityRules = aiConfig?.personality_rules || 'Friendly and conversational.';
-  const knowledgeContent = (knowledgeBase || []).map((e) => `## ${e.title}\n${e.content}`).join('\n\n');
+  const propertyInfo = aiConfig?.property_info || '';
 
-  return `You are ${assistantName}, the virtual leasing assistant for South Oak Apartments at 104 S Oak St, Spokane, WA 99204 in Browne's Addition.
+  return `You are the virtual leasing assistant for South Oak Apartments at 104 S Oak St, Spokane, WA 99201 in Browne's Addition.
 
 ## YOUR PERSONALITY
 ${personalityRules}
@@ -54,8 +50,8 @@ DO NOT:
 - Use discriminatory language
 - Be pushy
 
-## KNOWLEDGE BASE
-${knowledgeContent || 'Property info being updated. Offer to have Steve contact them.'}`;
+## PROPERTY INFORMATION
+${propertyInfo || 'Property info being updated. Offer to have Steve contact them.'}`;
 }
 
 function extractLeadInfo(messages) {

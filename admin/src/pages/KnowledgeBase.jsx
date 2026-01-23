@@ -1,65 +1,41 @@
 import React, { useState, useEffect } from 'react';
 
 export default function KnowledgeBase() {
-  const [entries, setEntries] = useState([]);
+  const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-  const [editContent, setEditContent] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-  const [newEntry, setNewEntry] = useState({ category: '', title: '', content: '' });
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    fetchEntries();
+    fetchKnowledge();
   }, []);
 
-  async function fetchEntries() {
+  async function fetchKnowledge() {
     try {
       const res = await fetch('/api/admin/knowledge');
       const data = await res.json();
-      setEntries(data);
+      setContent(data.content || '');
     } catch (err) {
-      console.error('Failed to fetch knowledge base:', err);
+      console.error('Failed to fetch knowledge:', err);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSave(id) {
+  async function handleSave() {
+    setSaving(true);
     try {
-      await fetch(`/api/admin/knowledge/${id}`, {
+      await fetch('/api/admin/knowledge', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editContent }),
+        body: JSON.stringify({ content }),
       });
-      setEditingId(null);
-      setMessage({ type: 'success', text: 'Saved successfully' });
-      fetchEntries();
+      setMessage({ type: 'success', text: 'Saved successfully!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to save' });
-    }
-  }
-
-  async function handleAdd() {
-    if (!newEntry.category || !newEntry.title || !newEntry.content) {
-      setMessage({ type: 'error', text: 'All fields are required' });
-      return;
-    }
-
-    try {
-      await fetch('/api/admin/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEntry),
-      });
-      setShowAdd(false);
-      setNewEntry({ category: '', title: '', content: '' });
-      setMessage({ type: 'success', text: 'Entry added successfully' });
-      fetchEntries();
-      setTimeout(() => setMessage(null), 3000);
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to add entry' });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -67,116 +43,73 @@ export default function KnowledgeBase() {
     return <div className="loading">Loading...</div>;
   }
 
-  const categories = ['property', 'amenities', 'pricing', 'policies', 'neighborhood', 'faqs'];
-
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Knowledge Base</h2>
-        <button className="btn btn--primary" onClick={() => setShowAdd(true)}>
-          Add Entry
+        <h2>Property Information</h2>
+        <button
+          className="btn btn--primary"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
 
-      {message && <div className={message.type}>{message.text}</div>}
-
-      {showAdd && (
-        <div className="card" style={{ marginBottom: '20px' }}>
-          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Add New Entry</h3>
-          <div className="form-group">
-            <label>Category</label>
-            <select
-              value={newEntry.category}
-              onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value })}
-            >
-              <option value="">Select category</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Title</label>
-            <input
-              type="text"
-              value={newEntry.title}
-              onChange={(e) => setNewEntry({ ...newEntry, title: e.target.value })}
-              placeholder="e.g., Pet Policy"
-            />
-          </div>
-          <div className="form-group">
-            <label>Content</label>
-            <textarea
-              value={newEntry.content}
-              onChange={(e) => setNewEntry({ ...newEntry, content: e.target.value })}
-              placeholder="Enter the information..."
-            />
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn btn--primary" onClick={handleAdd}>
-              Save Entry
-            </button>
-            <button className="btn btn--secondary" onClick={() => setShowAdd(false)}>
-              Cancel
-            </button>
-          </div>
+      {message && (
+        <div className={message.type} style={{ marginBottom: '16px' }}>
+          {message.text}
         </div>
       )}
 
-      {entries.length > 0 ? (
-        <div className="kb-list">
-          {entries.map((entry) => (
-            <div key={entry.id} className="kb-item">
-              <span className="category">{entry.category}</span>
-              <h4>{entry.title}</h4>
+      <div className="card">
+        <p style={{ marginBottom: '16px', color: '#666', fontSize: '14px' }}>
+          Enter all property information below. The AI assistant will use this to answer questions about the apartment.
+          Include details about pricing, amenities, policies, neighborhood, move-in specials, etc.
+        </p>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder={`Example:
 
-              {editingId === entry.id ? (
-                <div>
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    style={{ width: '100%', minHeight: '150px', marginTop: '12px' }}
-                  />
-                  <div className="actions">
-                    <button className="btn btn--primary" onClick={() => handleSave(entry.id)}>
-                      Save
-                    </button>
-                    <button
-                      className="btn btn--secondary"
-                      onClick={() => setEditingId(null)}
-                      style={{ marginLeft: '10px' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="content">{entry.content}</p>
-                  <div className="actions">
-                    <button
-                      className="btn btn--secondary"
-                      onClick={() => {
-                        setEditingId(entry.id);
-                        setEditContent(entry.content);
-                      }}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state">
-          <p>No knowledge base entries yet.</p>
-          <p style={{ marginTop: '10px' }}>Add property information for Sona to reference.</p>
-        </div>
-      )}
+PROPERTY DETAILS
+- Address: 104 South Oak, Spokane WA 99201
+- Unit size: 2 bedroom, 1 bath, 700 sqft
+- Rent: $1,200/month
+- Move-in Special: $400 off first month if you move in by Feb 1st
+
+AMENITIES
+- Hardwood floors throughout
+- Backyard picnic area
+- Laundry in building
+- Pet friendly (cats and small dogs welcome)
+- Reserved parking
+- Storage space included
+
+POLICIES
+- Lease: 12-month minimum
+- Security deposit: $1,200
+- Pet deposit: $300
+- No smoking
+
+NEIGHBORHOOD
+- Historic Browne's Addition
+- 2 blocks to restaurants, coffee shops, and pubs
+- Easy walk to downtown Spokane
+- Bus stop on corner
+- Minutes from Kendall Yards and I-90`}
+          style={{
+            width: '100%',
+            minHeight: '500px',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            lineHeight: '1.6',
+            padding: '16px',
+            border: '1px solid #ddd',
+            borderRadius: '8px'
+          }}
+        />
+      </div>
     </div>
   );
 }
