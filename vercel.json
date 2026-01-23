@@ -1,9 +1,12 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
+  "buildCommand": "cd frontend && npm install && npm run build && cd ../admin && npm install && npm run build && mkdir -p ../frontend/dist/admin && cp -r dist/* ../frontend/dist/admin/",
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/admin/", "destination": "/admin/index.html" },
+    { "source": "/admin/:path*", "destination": "/admin/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
