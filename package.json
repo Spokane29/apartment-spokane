@@ -1,21 +1,34 @@
 {
-  "name": "south-oak-chat",
+  "name": "apartment-spokane",
   "version": "1.0.0",
-  "description": "AI Leasing Assistant for South Oak Apartments",
+  "description": "South Oak Apartments - Pet Friendly in Browne's Addition",
   "private": true,
-  "workspaces": [
-    "backend",
-    "frontend",
-    "admin"
-  ],
+  "type": "module",
   "scripts": {
-    "dev:backend": "npm run dev --workspace=backend",
-    "dev:frontend": "npm run dev --workspace=frontend",
-    "dev:admin": "npm run dev --workspace=admin",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "build": "npm run build --workspaces"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dev:admin": "cd admin && npm run dev",
+    "build:admin": "cd admin && npm install && npm run build"
+  },
+  "dependencies": {
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.446.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^18.3.9",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
   }
 }
