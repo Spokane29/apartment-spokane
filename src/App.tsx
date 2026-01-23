@@ -65,9 +65,9 @@ function App() {
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + propertyImages.length) % propertyImages.length)
 
   return (
-    <div className="min-h-screen bg-background" style={{ paddingTop: '58px' }}>
-      {/* Fixed Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border/50 shadow-sm">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="bg-white border-b border-border/50 shadow-sm">
         <div className="w-full max-w-6xl mx-auto px-3 py-2 flex items-center justify-between">
           <div>
             <h1 className="text-base md:text-lg font-bold text-primary">Apartment-Spokane.com</h1>
@@ -191,7 +191,7 @@ function App() {
 
               {/* Right: Embedded Chat (Sticky on desktop) */}
               <div className="lg:col-span-2">
-                <div className="lg:sticky lg:top-[68px]" id="contact-form">
+                <div id="contact-form">
                   <Card className="shadow-lg border border-primary/20 overflow-hidden">
                     <div className="bg-primary text-white p-2.5">
                       <div className="flex items-center gap-1.5">
