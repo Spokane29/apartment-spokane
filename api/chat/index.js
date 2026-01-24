@@ -214,8 +214,27 @@ export default async function handler(req, res) {
       }).eq('id', session.leadId);
     }
 
-    // Note: Lead is saved directly to Supabase above with chat transcript
-    // The /api/leads/external endpoint is for external systems to send leads
+    // Also send to LeasingVoice API (only once per session)
+    if (hasMinimumInfo && !session.leadSentToLeasingVoice) {
+      console.log('Sending lead to LeasingVoice:', info);
+      const result = await sendToLeadsAPI({
+        first_name: info.first_name,
+        last_name: info.last_name || '',
+        phone: info.phone,
+        email: info.email || '',
+        tour_date: info.tour_date || '',
+        tour_time: info.tour_time || ''
+      });
+      if (result?.success) {
+        session.leadSentToLeasingVoice = true;
+        // Update local lead with LeasingVoice ID if returned
+        if (result.data?.leadId && session.leadId) {
+          await supabase.from('leads').update({
+            leasingvoice_id: result.data.leadId
+          }).eq('id', session.leadId);
+        }
+      }
+    }
 
     res.json({ message: assistantMessage, sessionId: session.id });
   } catch (error) {
