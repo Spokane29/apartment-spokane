@@ -205,7 +205,8 @@ ADDITIONAL RULES:
 - Never make up information not in the knowledge base
 - Stay fair housing compliant
 - Don't use markdown formatting
-- NEVER ask for info already collected above`;
+- NEVER ask for info already collected above
+- When suggesting a tour, keep it SIMPLE: "Want to schedule a tour?" or "When would you like to come see it?" - do NOT add specific reasons like "to see the storage" or "to check out the parking"`;
   }
 
   // Fallback
@@ -228,7 +229,8 @@ ${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
 ${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
 ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
 
-Keep responses SHORT. NEVER ask for info already collected.`;
+Keep responses SHORT. NEVER ask for info already collected.
+When suggesting a tour, just say "Want to schedule a tour?" - don't add reasons like "to see the X".`;
 }
 
 function extractLeadInfo(messages) {
