@@ -73,11 +73,14 @@ IMPORTANT: Follow the instructions in the knowledge base below.
 
 ${knowledgeContent}
 
-CRITICAL - CONFIRMATION RESPONSE:
-When you have collected all required info (name, phone, email, tour date), use this EXACT template for your confirmation (keep it short!):
+CRITICAL - TOUR SCHEDULING:
+1. When someone gives a DATE without a TIME (e.g., "tomorrow", "Saturday"), ALWAYS ask: "What time works best for you - morning or afternoon?"
+2. Only give confirmation AFTER you have: name, phone, email, tour date AND tour time
+
+CONFIRMATION RESPONSE (use ONLY after collecting ALL info including time):
 "${confirmationTemplate}"
 
-Replace {name}, {phone}, {email}, {tour_date} with the actual values. Do NOT add extra information after the confirmation.
+Replace {name}, {phone}, {email}, {tour_date}, {tour_time} with actual values. Do NOT add extra text after confirmation.
 
 ADDITIONAL RULES:
 - Keep ALL responses to 2-3 sentences max

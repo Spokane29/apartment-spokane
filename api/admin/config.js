@@ -2,25 +2,81 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
+const DEFAULT_CONFIRMATION = "Got it, {name}! You're scheduled for {tour_date} at {tour_time}. Steve will reach out at {phone} to confirm. See you soon!";
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const { data, error } = await supabase.from('ai_config').select('*').single();
+    // Get AI config
+    const { data: config, error } = await supabase.from('ai_config').select('*').single();
     if (error && error.code !== 'PGRST116') return res.status(500).json({ error: error.message });
-    res.json(data);
+
+    // Get confirmation template from knowledge_base
+    const { data: template } = await supabase
+      .from('knowledge_base')
+      .select('content')
+      .eq('category', 'template')
+      .single();
+
+    res.json({
+      ...config,
+      confirmation_template: template?.content || DEFAULT_CONFIRMATION
+    });
+
   } else if (req.method === 'PUT') {
-    const { assistant_name, personality_rules, greeting_message } = req.body;
+    const { assistant_name, personality_rules, greeting_message, confirmation_template } = req.body;
+
+    // Update ai_config
     const updates = {};
-    if (assistant_name) updates.assistant_name = assistant_name;
-    if (personality_rules) updates.personality_rules = personality_rules;
-    if (greeting_message) updates.greeting_message = greeting_message;
+    if (assistant_name !== undefined) updates.assistant_name = assistant_name;
+    if (personality_rules !== undefined) updates.personality_rules = personality_rules;
+    if (greeting_message !== undefined) updates.greeting_message = greeting_message;
 
-    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
+    let configData = null;
+    if (Object.keys(updates).length > 0) {
+      const { data: existing } = await supabase.from('ai_config').select('id').single();
+      const { data, error } = await supabase
+        .from('ai_config')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      configData = data;
+    }
 
-    const { data: existing } = await supabase.from('ai_config').select('id').single();
-    const { data, error } = await supabase.from('ai_config').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', existing.id).select().single();
+    // Update confirmation template if provided
+    let templateContent = null;
+    if (confirmation_template !== undefined) {
+      const { data: existing } = await supabase
+        .from('knowledge_base')
+        .select('id')
+        .eq('category', 'template')
+        .single();
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+      if (existing) {
+        await supabase
+          .from('knowledge_base')
+          .update({ content: confirmation_template, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('knowledge_base')
+          .insert([{ category: 'template', title: 'Confirmation Template', content: confirmation_template }]);
+      }
+      templateContent = confirmation_template;
+    }
+
+    // Return updated config
+    if (!configData) {
+      const { data } = await supabase.from('ai_config').select('*').single();
+      configData = data;
+    }
+
+    res.json({
+      ...configData,
+      confirmation_template: templateContent || DEFAULT_CONFIRMATION
+    });
+
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
