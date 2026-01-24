@@ -58,10 +58,16 @@ async function sendToLeadsAPI(leadData) {
     propertyInterest: 'South Oak Apartment',
     source: 'south-oak-website',
     companyId: '322039f9-b67b-4084-b806-387ba26c4810',
-    message: leadData.tour_date
-      ? `Tour requested for ${leadData.tour_date}${leadData.tour_time ? ' at ' + leadData.tour_time : ''}`
-      : 'Interested via website chat'
+    message: 'Interested via website chat'
   };
+
+  // Add tour date/time as preferred fields for automatic tour creation
+  if (leadData.tour_date) {
+    payload.preferredDate = leadData.tour_date;
+  }
+  if (leadData.tour_time) {
+    payload.preferredTime = leadData.tour_time;
+  }
 
   try {
     console.log('Sending lead to LeasingVoice:', apiUrl, payload.firstName, payload.phone);
