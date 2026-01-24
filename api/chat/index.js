@@ -8,50 +8,62 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 const sessions = new Map();
 
 async function buildSystemPrompt() {
-  const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
+  // Fetch both ai_config and knowledge_base
+  const [configResult, kbResult] = await Promise.all([
+    supabase.from('ai_config').select('*').single(),
+    supabase.from('knowledge_base').select('*').order('category', { ascending: true })
+  ]);
 
+  const aiConfig = configResult.data;
+  const knowledgeBase = kbResult.data || [];
+
+  // Combine all knowledge base entries into one document
+  const knowledgeContent = knowledgeBase
+    .map((entry) => entry.content)
+    .join('\n\n');
+
+  // If we have substantial knowledge base content, use it as the primary instruction set
+  if (knowledgeContent && knowledgeContent.trim().length > 100) {
+    return `You are the virtual leasing assistant for South Oak Apartments.
+
+IMPORTANT: Follow the instructions in the knowledge base below. The knowledge base defines your personality, goals, response style, and all property information.
+
+${knowledgeContent}
+
+ADDITIONAL RULES:
+- Never make up information not in the knowledge base
+- Stay fair housing compliant - never use discriminatory language
+- Keep responses conversational and natural
+- Don't use markdown formatting in responses`;
+  }
+
+  // Fallback if no knowledge base content
   const personalityRules = aiConfig?.personality_rules || 'Friendly and conversational.';
-  const propertyInfo = aiConfig?.property_info || '';
 
   return `You are the virtual leasing assistant for South Oak Apartments at 104 S Oak St, Spokane, WA 99201 in Browne's Addition.
 
 ## YOUR PERSONALITY
 ${personalityRules}
 
-## COMMUNICATION STYLE
-- Answer questions directly without overwhelming with info
-- Ask ONE question at a time when gathering info
-- Keep responses concise (2-3 sentences typical)
-- Use natural conversation flow
-- Never be pushy or salesy
+## YOUR GOALS
+1. Answer questions about the apartment briefly
+2. Guide conversations toward scheduling a tour
+3. Collect contact info naturally: name, phone, email, preferred tour date
 
-## YOUR GOALS (priority order)
-1. Answer the prospect's immediate question first
-2. Naturally learn what they're looking for
-3. Collect contact info through conversation (NOT a form dump)
-4. Offer to schedule a tour when timing is right
+## PROPERTY BASICS
+- 2 bedroom, 1 bath - $1,200/month
+- Available now
+- Pet friendly, no pet deposit
+- Browne's Addition neighborhood
 
-## INFORMATION TO COLLECT
-- First name (required)
-- Phone number (required)
-- Email (encouraged)
-- Move-in timeframe (required)
-
-## TOUR SCHEDULING
-- Property manager is Steve
-- Offer tour times naturally
-- Collect contact info if not gathered
+## RESPONSE STYLE
+- Keep responses to 2-3 sentences
+- After answering a question, suggest a tour
+- Be friendly and conversational
 
 ## BOUNDARIES
-DO NOT:
-- Make up information not in knowledge base
-- Discuss other tenants
-- Negotiate pricing
-- Use discriminatory language
-- Be pushy
-
-## PROPERTY INFORMATION
-${propertyInfo || 'Property info being updated. Offer to have Steve contact them.'}`;
+- Never make up information
+- Stay fair housing compliant`;
 }
 
 function extractLeadInfo(messages) {
