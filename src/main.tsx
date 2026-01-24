@@ -6,6 +6,16 @@ import App from './App.tsx'
 import PrivacyPolicy from './pages/PrivacyPolicy.tsx'
 import TermsOfUse from './pages/TermsOfUse.tsx'
 
+// Track page view
+fetch('/api/track', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    page: window.location.pathname,
+    referrer: document.referrer || null
+  })
+}).catch(() => {});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

@@ -86,6 +86,18 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_started_at ON chat_sessions(started_at);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_lead_captured ON chat_sessions(lead_captured);
 
+-- Page views table for visitor tracking
+CREATE TABLE IF NOT EXISTS page_views (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  page TEXT DEFAULT '/',
+  referrer TEXT,
+  user_agent TEXT,
+  ip_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_page_views_created_at ON page_views(created_at);
+
 -- Enable Row Level Security (optional, for production)
 -- ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE scheduled_tours ENABLE ROW LEVEL SECURITY;

@@ -10,6 +10,7 @@ export default function Dashboard() {
     tourConversionRate: '0%',
     avgMessagesPerSession: 0
   });
+  const [visitors, setVisitors] = useState({ totalViews: 0, uniqueVisitors: 0 });
   const [recentLeads, setRecentLeads] = useState([]);
   const [loading, setLoading] = useState(true);
 
