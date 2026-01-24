@@ -182,9 +182,18 @@ export default function EmbeddedChat() {
             source.buffer = audioBuffer
             source.connect(ctx.destination)
 
-            source.onended = () => {
-              console.log('Audio ended, starting auto-listen')
+            source.onended = async () => {
+              console.log('Audio ended via Web Audio')
               setIsSpeaking(false)
+
+              // Suspend AudioContext to release audio resources before using mic
+              try {
+                await ctx.suspend()
+                console.log('AudioContext suspended')
+              } catch (e) {
+                console.log('Could not suspend AudioContext:', e)
+              }
+
               autoStartListening()
             }
 
@@ -333,7 +342,7 @@ export default function EmbeddedChat() {
   }
 
   // Auto-start listening after AI speaks (with 5 second timeout)
-  const autoStartListening = (retryCount = 0) => {
+  const autoStartListening = async (retryCount = 0) => {
     // Use ref to get current value (avoid stale closure)
     const isVoiceEnabled = voiceEnabledRef.current
     console.log('autoStartListening called, voiceEnabled:', isVoiceEnabled, 'retry:', retryCount)
@@ -363,8 +372,18 @@ export default function EmbeddedChat() {
       recognitionRef.current = null
     }
 
+    // Re-request mic permission to ensure we still have access (mobile can revoke)
+    try {
+      console.log('Re-requesting mic permission...')
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log('Mic permission confirmed')
+    } catch (err) {
+      console.error('Mic permission lost:', err)
+      return
+    }
+
     // Longer delay for mobile - give browser time to fully release mic
-    const delay = retryCount === 0 ? 500 : 300
+    const delay = retryCount === 0 ? 600 : 400
     console.log('Waiting', delay, 'ms before starting recognition')
 
     setTimeout(() => {
@@ -401,7 +420,7 @@ export default function EmbeddedChat() {
         // Retry up to 2 times with fresh recognition instance
         if (retryCount < 2) {
           console.log('Retrying with fresh recognition... attempt', retryCount + 1)
-          setTimeout(() => autoStartListening(retryCount + 1), 600)
+          setTimeout(() => autoStartListening(retryCount + 1), 700)
         }
       }
     }, delay)
