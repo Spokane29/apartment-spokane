@@ -21,13 +21,20 @@ export default function Dashboard() {
   async function fetchData() {
     setLoading(true);
     try {
-      const [analyticsRes, leadsRes] = await Promise.all([
+      const [analyticsRes, leadsRes, trackRes] = await Promise.all([
         fetch(`/api/admin/analytics?days=${days}`),
         fetch(`/api/leads?days=${days}`),
+        fetch(`/api/track?days=${days}`),
       ]);
 
       const analytics = await analyticsRes.json();
       const leads = await leadsRes.json();
+      const trackData = await trackRes.json();
+
+      setVisitors({
+        totalViews: trackData.totalViews || 0,
+        uniqueVisitors: trackData.uniqueVisitors || 0
+      });
 
       setStats(analytics.summary || {
         totalSessions: 0,
@@ -68,7 +75,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
+        <div className="card">
+          <h3>Page Views</h3>
+          <div className="stat">{visitors.totalViews}</div>
+        </div>
+        <div className="card">
+          <h3>Unique Visitors</h3>
+          <div className="stat">{visitors.uniqueVisitors}</div>
+        </div>
         <div className="card">
           <h3>Chat Sessions</h3>
           <div className="stat">{stats.totalSessions}</div>
@@ -84,14 +99,6 @@ export default function Dashboard() {
         <div className="card">
           <h3>Lead Rate</h3>
           <div className="stat">{stats.leadConversionRate}</div>
-        </div>
-        <div className="card">
-          <h3>Tour Rate</h3>
-          <div className="stat">{stats.tourConversionRate}</div>
-        </div>
-        <div className="card">
-          <h3>Avg Messages</h3>
-          <div className="stat">{stats.avgMessagesPerSession}</div>
         </div>
       </div>
 
