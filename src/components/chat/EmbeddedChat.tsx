@@ -105,19 +105,24 @@ export default function EmbeddedChat() {
   }
 
   const handleVoiceInput = (text: string) => {
+    console.log('handleVoiceInput:', text)
     // Clear the auto-stop timeout since we got input
     if (listenTimeoutRef.current) {
       clearTimeout(listenTimeoutRef.current)
       listenTimeoutRef.current = null
     }
     setIsListening(false)
+
+    // Fully cleanup recognition to prepare for next auto-listen
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop()
+        recognitionRef.current.abort()
       } catch (e) {
-        // Ignore - already stopped
+        // Ignore
       }
+      recognitionRef.current = null
     }
+
     sendMessage(text)
   }
 
@@ -348,13 +353,24 @@ export default function EmbeddedChat() {
       listenTimeoutRef.current = null
     }
 
-    // Small delay to let the previous recognition fully stop
-    setTimeout(() => {
-      // Recreate recognition object to avoid stale state on mobile
-      if (!recognitionRef.current || retryCount > 0) {
-        console.log('Creating fresh recognition instance')
-        recognitionRef.current = createRecognition()
+    // Stop any existing recognition first
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort()
+      } catch (e) {
+        // Ignore
       }
+      recognitionRef.current = null
+    }
+
+    // Longer delay for mobile - give browser time to fully release mic
+    const delay = retryCount === 0 ? 500 : 300
+    console.log('Waiting', delay, 'ms before starting recognition')
+
+    setTimeout(() => {
+      // ALWAYS create fresh recognition instance for mobile reliability
+      console.log('Creating fresh recognition instance')
+      recognitionRef.current = createRecognition()
 
       if (!recognitionRef.current) {
         console.log('Failed to create recognition')
@@ -382,13 +398,13 @@ export default function EmbeddedChat() {
         console.error('Failed to auto-start listening:', err.message)
         setIsListening(false)
 
-        // Retry once with a fresh recognition instance
-        if (retryCount < 1) {
-          console.log('Retrying with fresh recognition...')
-          setTimeout(() => autoStartListening(retryCount + 1), 500)
+        // Retry up to 2 times with fresh recognition instance
+        if (retryCount < 2) {
+          console.log('Retrying with fresh recognition... attempt', retryCount + 1)
+          setTimeout(() => autoStartListening(retryCount + 1), 600)
         }
       }
-    }, retryCount === 0 ? 300 : 100)
+    }, delay)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
