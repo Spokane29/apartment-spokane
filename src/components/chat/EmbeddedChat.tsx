@@ -24,6 +24,8 @@ export default function EmbeddedChat() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const listeningTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const shouldRestartListening = useRef(false)
+  const audioUnlocked = useRef(false)
+  const audioContext = useRef<AudioContext | null>(null)
 
   useEffect(() => {
     initChat()
@@ -102,6 +104,30 @@ export default function EmbeddedChat() {
     }, 15000)
   }
 
+  // Unlock audio on mobile - must be called from user gesture
+  const unlockAudio = () => {
+    if (audioUnlocked.current) return
+
+    // Create AudioContext
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext
+    if (AudioContextClass) {
+      audioContext.current = new AudioContextClass()
+      // Resume if suspended
+      if (audioContext.current.state === 'suspended') {
+        audioContext.current.resume()
+      }
+    }
+
+    // Also play a silent sound to unlock HTML5 Audio
+    const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV////////////////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQDgAAAAAAAAAGwmRaOzQAAAAAAAAAAAAAAAAD/4xjEABpgo8AAACAAAGMAIAABAQEA/+PYxBQAAADSAHAAAEAEAQIEBP/j2MQAAAADSAAAAADg==')
+    silentAudio.play().then(() => {
+      console.log('Audio unlocked')
+      audioUnlocked.current = true
+    }).catch(() => {
+      // Ignore errors, we'll try again on next interaction
+    })
+  }
+
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
@@ -149,12 +175,48 @@ export default function EmbeddedChat() {
       console.log('Voice API response received, audio length:', data.audio?.length || 0)
       if (data.audio) {
         console.log('Creating audio element...')
+
+        // Decode base64 to array buffer
+        const binaryString = atob(data.audio)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+
+        // Try Web Audio API first (more reliable on mobile)
+        if (audioContext.current) {
+          try {
+            const audioBuffer = await audioContext.current.decodeAudioData(bytes.buffer.slice(0))
+            const source = audioContext.current.createBufferSource()
+            source.buffer = audioBuffer
+            source.connect(audioContext.current.destination)
+            source.onended = () => {
+              console.log('Audio finished playing')
+              setIsSpeaking(false)
+              if (voiceEnabled && SpeechRecognition) {
+                startListeningWithTimeout()
+                try {
+                  recognitionRef.current?.start()
+                  setIsListening(true)
+                } catch (e) {
+                  console.error('Failed to restart listening:', e)
+                }
+              }
+            }
+            source.start()
+            console.log('Audio playing via Web Audio API')
+            return
+          } catch (e) {
+            console.log('Web Audio failed, falling back to HTML5 Audio:', e)
+          }
+        }
+
+        // Fallback to HTML5 Audio
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
         audio.onended = () => {
           console.log('Audio finished playing')
           setIsSpeaking(false)
-          // Auto-start listening after AI finishes speaking
           if (voiceEnabled && SpeechRecognition) {
             startListeningWithTimeout()
             try {
@@ -169,7 +231,7 @@ export default function EmbeddedChat() {
           console.error('Audio playback error:', e)
           setIsSpeaking(false)
         }
-        console.log('Playing audio...')
+        console.log('Playing audio via HTML5...')
         await audio.play()
         console.log('Audio play started')
       } else {
@@ -193,6 +255,9 @@ export default function EmbeddedChat() {
   const sendMessage = async (messageText?: string) => {
     const text = messageText || input.trim()
     if (!text || isLoading) return
+
+    // Unlock audio on user interaction
+    unlockAudio()
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
@@ -223,6 +288,9 @@ export default function EmbeddedChat() {
   }
 
   const toggleListening = () => {
+    // Unlock audio on user interaction
+    unlockAudio()
+
     if (!SpeechRecognition) {
       alert('Speech recognition is not supported in your browser')
       return
