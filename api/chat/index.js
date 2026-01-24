@@ -9,40 +9,33 @@ const sessions = new Map();
 
 // Send lead to LeasingVoice API
 async function sendToLeasingVoice(leadData) {
-  const apiUrl = process.env.LEASINGVOICE_API_URL;
-  const apiKey = process.env.LEASINGVOICE_API_KEY;
-
-  if (!apiUrl || apiUrl === 'your_leasingvoice_url') {
-    console.log('LeasingVoice API not configured');
-    return null;
-  }
+  const apiUrl = 'https://apartment-spokane.com/api/leads/external';
 
   const payload = {
-    first_name: leadData.first_name || '',
-    last_name: leadData.last_name || '',
+    firstName: leadData.first_name || '',
+    lastName: leadData.last_name || '',
     phone: leadData.phone || '',
     email: leadData.email || '',
-    tour_date: leadData.tour_date || '',
-    tour_time: leadData.tour_time || '',
-    property: 'South Oak Apartments',
-    unit_type: '2BR/1BA',
-    rent: '1200',
-    source: 'website_chatbot',
-    notes: leadData.notes || ''
+    propertyInterest: 'South Oak Apartment',
+    source: 'south-oak-website',
+    companyId: '322039f9-b67b-4084-b806-387ba26c4810',
+    message: leadData.tour_date
+      ? `Tour requested for ${leadData.tour_date}${leadData.tour_time ? ' at ' + leadData.tour_time : ''}`
+      : 'Interested via website chat'
   };
 
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey && apiKey !== 'your_leasingvoice_key' && { 'Authorization': `Bearer ${apiKey}` })
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)
     });
 
-    console.log('LeasingVoice response:', response.status);
-    return { success: response.ok };
+    const result = await response.json();
+    console.log('LeasingVoice response:', result);
+    return { success: response.ok, data: result };
   } catch (error) {
     console.error('LeasingVoice error:', error.message);
     return { success: false, error: error.message };
@@ -187,10 +180,9 @@ export default async function handler(req, res) {
     const assistantMessage = response.content[0].text;
     session.messages.push({ role: 'assistant', content: assistantMessage });
 
-    // Check if we have minimum required info to save/send lead
+    // Check if we have minimum required info (firstName + phone)
     const info = session.collectedInfo;
     const hasMinimumInfo = info.first_name && info.phone;
-    const hasFullInfo = hasMinimumInfo && info.email && info.tour_date;
 
     // Save to Supabase
     if (hasMinimumInfo && !session.leadId) {
@@ -202,30 +194,34 @@ export default async function handler(req, res) {
         move_in_date: info.tour_date || '',
         chat_transcript: session.messages,
         source: 'website-chat',
-        property_interest: '104 S Oak',
+        property_interest: 'South Oak Apartment',
       }]).select().single();
       if (lead) session.leadId = lead.id;
     } else if (session.leadId) {
       await supabase.from('leads').update({
-        ...info,
+        first_name: info.first_name,
+        last_name: info.last_name || '',
+        phone: info.phone,
+        email: info.email || '',
         move_in_date: info.tour_date || '',
         chat_transcript: session.messages
       }).eq('id', session.leadId);
     }
 
-    // Send to LeasingVoice when we have full info (only once)
-    if (hasFullInfo && !session.leadSentToLeasingVoice) {
+    // Send to LeasingVoice when we have minimum info (only once)
+    if (hasMinimumInfo && !session.leadSentToLeasingVoice) {
       console.log('Sending lead to LeasingVoice:', info);
-      await sendToLeasingVoice({
+      const result = await sendToLeasingVoice({
         first_name: info.first_name,
         last_name: info.last_name || '',
         phone: info.phone,
-        email: info.email,
-        tour_date: info.tour_date,
-        tour_time: info.tour_time || '',
-        notes: `Tour requested via website chat`
+        email: info.email || '',
+        tour_date: info.tour_date || '',
+        tour_time: info.tour_time || ''
       });
-      session.leadSentToLeasingVoice = true;
+      if (result?.success) {
+        session.leadSentToLeasingVoice = true;
+      }
     }
 
     res.json({ message: assistantMessage, sessionId: session.id });
