@@ -167,7 +167,14 @@ export default function EmbeddedChat() {
 
     // Preprocess voice input to fix email formatting
     const processedText = preprocessVoiceText(text)
-    sendMessage(processedText)
+
+    // Detect incomplete email (just domain part) and add helpful context
+    if (processedText.match(/^@?\s*(gmail|yahoo|hotmail|outlook|icloud)\.(com|net|org)$/i)) {
+      // User said just the domain part - voice missed the username
+      sendMessage(processedText + " (voice may have cut off - please type full email)")
+    } else {
+      sendMessage(processedText)
+    }
   }
 
   // Track if audio has been unlocked on iOS
