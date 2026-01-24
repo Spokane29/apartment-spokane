@@ -7,34 +7,45 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 // In-memory session store (for serverless, consider using Redis or database)
 const sessions = new Map();
 
-// Send lead directly to database with south-oak-website source (for LeasingVoice tracking)
+// Send lead to LeasingVoice API
 async function sendToLeadsAPI(leadData) {
+  const apiUrl = 'https://apartment-spokane.com/api/leads/external';
+
   const payload = {
-    first_name: leadData.first_name || '',
-    last_name: leadData.last_name || '',
+    firstName: leadData.first_name || '',
+    lastName: leadData.last_name || '',
     phone: leadData.phone || '',
     email: leadData.email || '',
+    propertyInterest: 'South Oak Apartment',
+    source: 'south-oak-website',
+    companyId: '322039f9-b67b-4084-b806-387ba26c4810',
     message: leadData.tour_date
       ? `Tour requested for ${leadData.tour_date}${leadData.tour_time ? ' at ' + leadData.tour_time : ''}`
-      : 'Interested via website chat',
-    property_interest: 'South Oak Apartment',
-    source: 'south-oak-website',
-    status: 'new'
+      : 'Interested via website chat'
   };
 
   try {
-    console.log('Saving lead to LeasingVoice tracking:', payload.first_name, payload.phone);
-    const { data, error } = await supabase.from('leads').insert([payload]).select().single();
+    console.log('Sending lead to LeasingVoice:', apiUrl, payload.firstName, payload.phone);
 
-    if (error) {
-      console.error('LeasingVoice save error:', error.message);
-      return { success: false, error: error.message };
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+    console.log('LeasingVoice response:', response.status, text);
+
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      result = { raw: text };
     }
 
-    console.log('Lead saved with LeasingVoice source, id:', data.id);
-    return { success: true, data: { leadId: data.id } };
+    return { success: response.ok, status: response.status, data: result };
   } catch (error) {
-    console.error('LeasingVoice error:', error.message);
+    console.error('LeasingVoice API error:', error.message);
     return { success: false, error: error.message };
   }
 }
