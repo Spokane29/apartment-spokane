@@ -22,111 +22,42 @@ export default function EmbeddedChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const listeningTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const shouldRestartListening = useRef(false)
-  const audioUnlocked = useRef(false)
-  const audioContext = useRef<AudioContext | null>(null)
 
   useEffect(() => {
     initChat()
+
     // Initialize speech recognition
     if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition()
-      recognitionRef.current.continuous = true
-      recognitionRef.current.interimResults = false
-      recognitionRef.current.lang = 'en-US'
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = 'en-US'
 
-      recognitionRef.current.onresult = (event: any) => {
-        // Get the latest result
-        const lastResult = event.results[event.results.length - 1]
-        if (lastResult.isFinal) {
-          const transcript = lastResult[0].transcript
-          // Stop listening and send
-          if (transcript.trim()) {
-            stopListeningAndSend(transcript.trim())
-          }
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        if (transcript.trim()) {
+          handleVoiceInput(transcript.trim())
         }
       }
 
-      recognitionRef.current.onerror = (event: any) => {
+      recognition.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error)
-        if (event.error !== 'no-speech') {
-          setIsListening(false)
-          clearListeningTimeout()
-        }
+        setIsListening(false)
       }
 
-      recognitionRef.current.onend = () => {
-        // Restart if we should keep listening (voice mode active)
-        if (shouldRestartListening.current && !isLoading) {
-          try {
-            recognitionRef.current?.start()
-          } catch (e) {
-            setIsListening(false)
-          }
-        } else {
-          setIsListening(false)
-        }
+      recognition.onend = () => {
+        setIsListening(false)
       }
+
+      recognitionRef.current = recognition
     }
 
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.abort()
       }
-      clearListeningTimeout()
     }
   }, [])
-
-  const clearListeningTimeout = () => {
-    if (listeningTimeoutRef.current) {
-      clearTimeout(listeningTimeoutRef.current)
-      listeningTimeoutRef.current = null
-    }
-  }
-
-  const stopListeningAndSend = (text: string) => {
-    clearListeningTimeout()
-    shouldRestartListening.current = false
-    recognitionRef.current?.stop()
-    setIsListening(false)
-    sendMessage(text)
-  }
-
-  const startListeningWithTimeout = () => {
-    clearListeningTimeout()
-    shouldRestartListening.current = true
-    // Auto-stop after 15 seconds of no final result
-    listeningTimeoutRef.current = setTimeout(() => {
-      shouldRestartListening.current = false
-      recognitionRef.current?.stop()
-      setIsListening(false)
-    }, 15000)
-  }
-
-  // Unlock audio on mobile - must be called from user gesture
-  const unlockAudio = () => {
-    if (audioUnlocked.current) return
-
-    // Create AudioContext
-    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext
-    if (AudioContextClass) {
-      audioContext.current = new AudioContextClass()
-      // Resume if suspended
-      if (audioContext.current.state === 'suspended') {
-        audioContext.current.resume()
-      }
-    }
-
-    // Also play a silent sound to unlock HTML5 Audio
-    const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV////////////////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQDgAAAAAAAAAGwmRaOzQAAAAAAAAAAAAAAAAD/4xjEABpgo8AAACAAAGMAIAABAQEA/+PYxBQAAADSAHAAAEAEAQIEBP/j2MQAAAADSAAAAADg==')
-    silentAudio.play().then(() => {
-      console.log('Audio unlocked')
-      audioUnlocked.current = true
-    }).catch(() => {
-      // Ignore errors, we'll try again on next interaction
-    })
-  }
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -143,20 +74,21 @@ export default function EmbeddedChat() {
       setMessages([{ id: Date.now(), role: 'assistant', content: data.message }])
     } catch (err) {
       console.error('Failed to init chat:', err)
-      setMessages([{ id: Date.now(), role: 'assistant', content: "Hi! I'm the virtual assistant for South Oak Apartments. Can I schedule a tour or answer any questions?" }])
+      setMessages([{ id: Date.now(), role: 'assistant', content: "Hi! I'm the virtual assistant for South Oak Apartments. How can I help you?" }])
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleVoiceInput = (text: string) => {
+    setIsListening(false)
+    sendMessage(text)
+  }
+
   const speakText = async (text: string) => {
-    if (!voiceEnabled) {
-      console.log('Voice disabled, skipping speech')
-      return
-    }
+    if (!voiceEnabled) return
 
     try {
-      console.log('Speaking text:', text.substring(0, 50) + '...')
       setIsSpeaking(true)
       const res = await fetch('/api/voice/speak', {
         method: 'POST',
@@ -165,77 +97,30 @@ export default function EmbeddedChat() {
       })
 
       if (!res.ok) {
-        const errorText = await res.text()
-        console.error('Voice API error:', res.status, errorText)
+        console.error('Voice API error:', res.status)
         setIsSpeaking(false)
         return
       }
 
       const data = await res.json()
-      console.log('Voice API response received, audio length:', data.audio?.length || 0)
       if (data.audio) {
-        console.log('Creating audio element...')
-
-        // Decode base64 to array buffer
-        const binaryString = atob(data.audio)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
-        }
-
-        // Try Web Audio API first (more reliable on mobile)
-        if (audioContext.current) {
-          try {
-            const audioBuffer = await audioContext.current.decodeAudioData(bytes.buffer.slice(0))
-            const source = audioContext.current.createBufferSource()
-            source.buffer = audioBuffer
-            source.connect(audioContext.current.destination)
-            source.onended = () => {
-              console.log('Audio finished playing')
-              setIsSpeaking(false)
-              if (voiceEnabled && SpeechRecognition) {
-                startListeningWithTimeout()
-                try {
-                  recognitionRef.current?.start()
-                  setIsListening(true)
-                } catch (e) {
-                  console.error('Failed to restart listening:', e)
-                }
-              }
-            }
-            source.start()
-            console.log('Audio playing via Web Audio API')
-            return
-          } catch (e) {
-            console.log('Web Audio failed, falling back to HTML5 Audio:', e)
-          }
-        }
-
-        // Fallback to HTML5 Audio
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
+
         audio.onended = () => {
-          console.log('Audio finished playing')
-          setIsSpeaking(false)
-          if (voiceEnabled && SpeechRecognition) {
-            startListeningWithTimeout()
-            try {
-              recognitionRef.current?.start()
-              setIsListening(true)
-            } catch (e) {
-              console.error('Failed to restart listening:', e)
-            }
-          }
-        }
-        audio.onerror = (e) => {
-          console.error('Audio playback error:', e)
           setIsSpeaking(false)
         }
-        console.log('Playing audio via HTML5...')
-        await audio.play()
-        console.log('Audio play started')
+
+        audio.onerror = () => {
+          console.error('Audio playback error')
+          setIsSpeaking(false)
+        }
+
+        audio.play().catch(err => {
+          console.error('Audio play failed:', err)
+          setIsSpeaking(false)
+        })
       } else {
-        console.error('No audio data in response')
         setIsSpeaking(false)
       }
     } catch (err) {
@@ -255,9 +140,6 @@ export default function EmbeddedChat() {
   const sendMessage = async (messageText?: string) => {
     const text = messageText || input.trim()
     if (!text || isLoading) return
-
-    // Unlock audio on user interaction
-    unlockAudio()
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
@@ -287,26 +169,30 @@ export default function EmbeddedChat() {
     }
   }
 
-  const toggleListening = () => {
-    // Unlock audio on user interaction
-    unlockAudio()
-
+  const startListening = () => {
     if (!SpeechRecognition) {
       alert('Speech recognition is not supported in your browser')
       return
     }
 
-    if (isListening) {
-      shouldRestartListening.current = false
-      clearListeningTimeout()
-      recognitionRef.current?.stop()
+    if (!recognitionRef.current) return
+
+    stopSpeaking()
+    setIsListening(true)
+
+    try {
+      recognitionRef.current.start()
+    } catch (err) {
+      console.error('Failed to start listening:', err)
       setIsListening(false)
-    } else {
-      stopSpeaking() // Stop any playing audio
-      startListeningWithTimeout()
-      recognitionRef.current?.start()
-      setIsListening(true)
     }
+  }
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+    }
+    setIsListening(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -322,8 +208,7 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setVoiceEnabled(!voiceEnabled); if (voiceEnabled) stopSpeaking(); }}
-          aria-label={voiceEnabled ? 'Disable voice responses' : 'Enable voice responses'}
+          onClick={() => { setVoiceEnabled(!voiceEnabled); if (voiceEnabled) stopSpeaking(); }}
         >
           {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
@@ -359,9 +244,8 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={(e) => { e.stopPropagation(); toggleListening(); }}
+          onClick={isListening ? stopListening : startListening}
           disabled={isLoading}
-          aria-label={isListening ? 'Stop listening' : 'Speak your message'}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
