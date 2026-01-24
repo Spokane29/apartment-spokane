@@ -194,18 +194,18 @@ function extractLeadInfo(messages) {
   const emailMatch = userText.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
   if (emailMatch) leadInfo.email = emailMatch[1].toLowerCase();
 
-  // Extract tour date/time - more patterns
-  const tourPatterns = [
-    /(?:tour|come|visit|see it|showing|schedule).*?(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|\d{1,2}\/\d{1,2})/i,
-    /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|morning|afternoon|noon|evening))?/i
-  ];
-  for (const pattern of tourPatterns) {
-    const match = userText.match(pattern);
-    if (match) {
-      leadInfo.tour_date = match[1];
-      if (match[2]) leadInfo.tour_time = match[2];
-      break;
-    }
+  // Extract tour date
+  const datePattern = /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|\d{1,2}\/\d{1,2})/i;
+  const dateMatch = userText.match(datePattern);
+  if (dateMatch) {
+    leadInfo.tour_date = dateMatch[1];
+  }
+
+  // Extract tour time separately
+  const timePattern = /(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)|morning|afternoon|noon|evening)/i;
+  const timeMatch = userText.match(timePattern);
+  if (timeMatch) {
+    leadInfo.tour_time = timeMatch[1];
   }
 
   return Object.keys(leadInfo).length > 0 ? leadInfo : null;
