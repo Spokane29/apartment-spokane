@@ -145,6 +145,31 @@ function extractLeadInfo(messages) {
   return Object.keys(leadInfo).length > 0 ? leadInfo : null;
 }
 
+// Log/update chat session for analytics
+async function logChatSession(sessionId, data) {
+  try {
+    const { data: existing } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('session_id', sessionId)
+      .single();
+
+    if (existing) {
+      await supabase.from('chat_sessions').update({
+        ...data,
+        updated_at: new Date().toISOString()
+      }).eq('session_id', sessionId);
+    } else {
+      await supabase.from('chat_sessions').insert([{
+        session_id: sessionId,
+        ...data
+      }]);
+    }
+  } catch (err) {
+    console.log('Analytics log error (table may not exist):', err.message);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -155,14 +180,21 @@ export default async function handler(req, res) {
     if (!message) return res.status(400).json({ error: 'Message required' });
 
     // Get or create session
+    const isNewSession = !sessions.has(sessionId);
     let session = sessions.get(sessionId) || {
       id: sessionId || crypto.randomUUID(),
       messages: [],
       leadId: null,
       collectedInfo: {},
-      leadSentToLeasingVoice: false
+      leadSentToLeasingVoice: false,
+      messageCount: 0,
+      userMessageCount: 0
     };
     if (!sessions.has(session.id)) sessions.set(session.id, session);
+
+    // Track message counts
+    session.messageCount = (session.messageCount || 0) + 1;
+    session.userMessageCount = (session.userMessageCount || 0) + 1;
 
     session.messages.push({ role: 'user', content: message });
 
@@ -235,6 +267,20 @@ export default async function handler(req, res) {
         }
       }
     }
+
+    // Log session analytics
+    const hasTourDate = !!(info.tour_date);
+    await logChatSession(session.id, {
+      message_count: session.messageCount + 1, // +1 for assistant response
+      user_message_count: session.userMessageCount,
+      lead_captured: hasMinimumInfo,
+      lead_id: session.leadId,
+      tour_booked: hasTourDate && hasMinimumInfo,
+      collected_name: !!info.first_name,
+      collected_phone: !!info.phone,
+      collected_email: !!info.email,
+      collected_tour_date: hasTourDate
+    });
 
     res.json({ message: assistantMessage, sessionId: session.id });
   } catch (error) {

@@ -62,6 +62,27 @@ INSERT INTO knowledge_base (category, title, content) VALUES
 ('policies', 'Tour Information', 'Tours are available by appointment. You''ll meet with Steve, our property manager, who can show you available units and answer any questions.')
 ON CONFLICT DO NOTHING;
 
+-- Chat sessions table (for analytics)
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  session_id TEXT UNIQUE NOT NULL,
+  started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  message_count INTEGER DEFAULT 0,
+  user_message_count INTEGER DEFAULT 0,
+  lead_captured BOOLEAN DEFAULT FALSE,
+  lead_id UUID,
+  tour_booked BOOLEAN DEFAULT FALSE,
+  collected_name BOOLEAN DEFAULT FALSE,
+  collected_phone BOOLEAN DEFAULT FALSE,
+  collected_email BOOLEAN DEFAULT FALSE,
+  collected_tour_date BOOLEAN DEFAULT FALSE
+);
+
+-- Create indexes for analytics queries
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_started_at ON chat_sessions(started_at);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_lead_captured ON chat_sessions(lead_captured);
+
 -- Enable Row Level Security (optional, for production)
 -- ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE scheduled_tours ENABLE ROW LEVEL SECURITY;
