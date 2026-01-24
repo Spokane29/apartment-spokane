@@ -729,7 +729,10 @@ const playAudio = async (base64Audio) => {
 
 After AI speaks, automatically activate microphone for 5 seconds.
 
-**Important:** Use a ref to track `voiceEnabled` state to avoid stale closures in callbacks:
+**Important considerations for mobile:**
+1. Use a ref to track `voiceEnabled` state to avoid stale closures in callbacks
+2. Recreate the recognition instance each time - mobile browsers get into bad state after multiple start/stop cycles
+3. Add retry mechanism if recognition.start() fails
 
 ```typescript
 // State and ref - ref avoids stale closure in audio callbacks
@@ -741,26 +744,63 @@ useEffect(() => {
   voiceEnabledRef.current = voiceEnabled
 }, [voiceEnabled])
 
-const autoStartListening = () => {
-  // Use ref to get current value (avoid stale closure)
+// Create/recreate speech recognition instance
+const createRecognition = () => {
+  if (!SpeechRecognition) return null
+
+  const recognition = new SpeechRecognition()
+  recognition.continuous = false
+  recognition.interimResults = false
+  recognition.lang = 'en-US'
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript
+    if (transcript.trim()) {
+      handleVoiceInput(transcript.trim())
+    }
+  }
+
+  recognition.onerror = (event) => {
+    // Ignore 'aborted' and 'no-speech' - they're expected
+    if (event.error !== 'aborted' && event.error !== 'no-speech') {
+      console.error('Speech recognition error:', event.error)
+    }
+    setIsListening(false)
+  }
+
+  recognition.onend = () => setIsListening(false)
+  return recognition
+}
+
+const autoStartListening = (retryCount = 0) => {
   const isVoiceEnabled = voiceEnabledRef.current
   if (!isVoiceEnabled || !SpeechRecognition) return
 
-  // Small delay for recognition to reset
   setTimeout(() => {
-    setIsListening(true)
-    recognition.start()
+    // CRITICAL: Recreate recognition to avoid stale state on mobile
+    recognitionRef.current = createRecognition()
+    if (!recognitionRef.current) return
 
-    // Auto-stop after 5 seconds if no speech
-    listenTimeoutRef.current = setTimeout(() => {
-      setIsListening(false)
-      recognition.stop()
-    }, 5000)
-  }, 300)
+    try {
+      recognitionRef.current.start()
+      setIsListening(true)
+
+      // Auto-stop after 5 seconds if no speech
+      listenTimeoutRef.current = setTimeout(() => {
+        setIsListening(false)
+        recognitionRef.current?.stop()
+      }, 5000)
+    } catch (err) {
+      // Retry once with fresh instance
+      if (retryCount < 1) {
+        setTimeout(() => autoStartListening(retryCount + 1), 500)
+      }
+    }
+  }, retryCount === 0 ? 300 : 100)
 }
 ```
 
-**Why the ref is needed:** When `audio.onended` fires, it captures the `voiceEnabled` value from when the callback was created. If the user toggled voice off/on during playback, the callback would have the wrong value. The ref always returns the current state.
+**Why recreate recognition each time:** Mobile browsers (especially Safari) can get the SpeechRecognition object into a bad state after multiple start/stop cycles. Creating a fresh instance each time is more reliable than reusing the same object.
 
 ---
 
@@ -941,6 +981,7 @@ const autoStartListening = () => {
 | Mobile audio not playing | AudioContext not initialized | Initialize on first user tap |
 | Mic not working on mobile | Permission not granted | Request permission explicitly |
 | Auto-listen stops after first exchange | Stale closure in callback | Use `voiceEnabledRef` instead of state in callbacks |
+| Auto-listen dies after 2-3 exchanges | Recognition object in bad state | Recreate recognition instance each time with `createRecognition()` |
 
 ### AI Issues
 
@@ -1022,6 +1063,7 @@ const autoStartListening = () => {
 | 1.7 | - | Added admin dashboard documentation |
 | 1.8 | - | Added conversation state tracking to prevent AI reset during tour booking |
 | 1.9 | - | Fixed stale closure bug in auto-listen (voiceEnabledRef) |
+| 1.10 | - | Fixed mobile recognition dying after 2 exchanges (recreate instance each time) |
 
 ---
 
