@@ -821,14 +821,16 @@ const autoStartListening = (retryCount = 0) => {
 
 For reliable hands-free on mobile, you must also:
 
-1. **Suspend AudioContext after playback** - Release audio resources before using mic:
+1. **Use HTML5 Audio instead of Web Audio API** - Web Audio conflicts with mic on mobile:
 ```typescript
-source.onended = async () => {
+// DON'T use Web Audio API for playback - it conflicts with microphone
+// Use simple HTML5 Audio instead:
+const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`)
+audio.onended = () => {
   setIsSpeaking(false)
-  // CRITICAL: Suspend to release audio resources
-  await ctx.suspend()
-  autoStartListening()
+  setTimeout(() => autoStartListening(), 200) // Small delay before mic
 }
+audio.play()
 ```
 
 2. **Release mic stream tracks and re-request** - Mobile has limited mic resources:
@@ -1129,6 +1131,7 @@ if (micStreamRef.current) {
 | 1.11 | - | More aggressive mobile fix: longer delays, abort+null cleanup, 2 retries |
 | 1.12 | - | Critical fix: suspend AudioContext after playback, re-request mic permission |
 | 1.13 | - | Release mic stream tracks between interactions (fixes 4-5 exchange limit) |
+| 1.14 | - | Switch to HTML5 Audio only - Web Audio API conflicts with mic on mobile |
 
 ---
 
