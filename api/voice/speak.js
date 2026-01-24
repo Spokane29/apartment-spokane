@@ -1,3 +1,41 @@
+// Convert text to be more natural for speech
+function convertToSpeakable(text) {
+  let result = text;
+
+  // Convert prices like $1,200 to "twelve hundred dollars"
+  result = result.replace(/\$1,200/g, 'twelve hundred dollars');
+  result = result.replace(/\$1200/g, 'twelve hundred dollars');
+  result = result.replace(/\$(\d),(\d{3})/g, (match, thousands, hundreds) => {
+    return `${thousands} thousand ${hundreds} dollars`;
+  });
+  result = result.replace(/\$(\d{3})/g, '$1 dollars');
+
+  // Convert /month to "a month" or "per month"
+  result = result.replace(/\/month/gi, ' a month');
+  result = result.replace(/\/mo/gi, ' a month');
+
+  // Convert addresses to be more speakable
+  result = result.replace(/(\d+)\s+S\s+/g, '$1 South ');
+  result = result.replace(/(\d+)\s+N\s+/g, '$1 North ');
+  result = result.replace(/(\d+)\s+E\s+/g, '$1 East ');
+  result = result.replace(/(\d+)\s+W\s+/g, '$1 West ');
+  result = result.replace(/\bSt\b/g, 'Street');
+  result = result.replace(/\bAve\b/g, 'Avenue');
+  result = result.replace(/\bBlvd\b/g, 'Boulevard');
+
+  // Convert bed/bath shorthand
+  result = result.replace(/(\d)-bedroom/gi, '$1 bedroom');
+  result = result.replace(/(\d)-bathroom/gi, '$1 bathroom');
+  result = result.replace(/(\d)-bed/gi, '$1 bedroom');
+  result = result.replace(/(\d)-bath/gi, '$1 bathroom');
+  result = result.replace(/(\d)\s*bed\s*\/\s*(\d)\s*bath/gi, '$1 bedroom $2 bathroom');
+
+  // Convert phone numbers to be more speakable
+  result = result.replace(/\((\d{3})\)\s*(\d{3})-(\d{4})/g, '$1 $2 $3');
+
+  return result;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -17,8 +55,10 @@ export default async function handler(req, res) {
   console.log('ElevenLabs key prefix:', ELEVEN_LABS_API_KEY.substring(0, 10) + '...');
 
   // Default voice - "Rachel" (friendly female voice good for customer service)
-  // You can change this to any ElevenLabs voice ID
   const VOICE_ID = process.env.ELEVEN_LABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
+
+  // Convert text to be more speech-friendly
+  const speakableText = convertToSpeakable(text);
 
   try {
     const response = await fetch(
@@ -31,11 +71,13 @@ export default async function handler(req, res) {
           'xi-api-key': ELEVEN_LABS_API_KEY,
         },
         body: JSON.stringify({
-          text: text,
-          model_id: 'eleven_monolingual_v1',
+          text: speakableText,
+          model_id: 'eleven_turbo_v2',
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
+            stability: 0.4,
+            similarity_boost: 0.8,
+            style: 0.3,
+            use_speaker_boost: true,
           },
         }),
       }
