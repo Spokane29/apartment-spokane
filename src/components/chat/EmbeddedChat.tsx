@@ -134,6 +134,9 @@ export default function EmbeddedChat() {
     sendMessage(text)
   }
 
+  // Track if audio has been unlocked on iOS
+  const audioUnlockedRef = useRef(false)
+
   // Initialize AudioContext on user gesture (required for mobile)
   const initAudioContext = () => {
     if (audioContextRef.current) return audioContextRef.current
@@ -148,6 +151,21 @@ export default function EmbeddedChat() {
       console.log('AudioContext initialized')
     }
     return audioContextRef.current
+  }
+
+  // Unlock audio playback on iOS (must be called during user gesture)
+  const unlockAudio = () => {
+    if (audioUnlockedRef.current) return
+
+    // Create and play a silent audio to unlock iOS audio
+    const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZDAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==')
+    silentAudio.volume = 0.01
+    silentAudio.play().then(() => {
+      audioUnlockedRef.current = true
+      console.log('iOS audio unlocked')
+    }).catch(() => {
+      // Ignore errors - this is just to unlock
+    })
   }
 
   const speakText = async (text: string) => {
@@ -169,15 +187,20 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
-        // Use HTML5 Audio ONLY - Web Audio API conflicts with mic on mobile
-        // This is simpler and more reliable for hands-free mode
-        const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
+        // Use HTML5 Audio with iOS Safari compatibility
+        const audio = new Audio()
         audioRef.current = audio
 
+        // iOS Safari requires these attributes
+        audio.setAttribute('playsinline', 'true')
+        audio.setAttribute('webkit-playsinline', 'true')
+
+        // Set source after attributes
+        audio.src = `data:audio/mpeg;base64,${data.audio}`
+
         audio.onended = () => {
-          console.log('Audio ended via HTML5, starting auto-listen')
+          console.log('Audio ended, starting auto-listen')
           setIsSpeaking(false)
-          // Small delay to ensure audio is fully released
           setTimeout(() => {
             autoStartListening()
           }, 200)
@@ -186,20 +209,24 @@ export default function EmbeddedChat() {
         audio.onerror = (e) => {
           console.error('Audio playback error:', e)
           setIsSpeaking(false)
-          // Still try to auto-listen even if audio failed
           setTimeout(() => {
             autoStartListening()
           }, 200)
         }
 
-        audio.play().catch(err => {
-          console.error('Audio play failed:', err)
-          setIsSpeaking(false)
-          // Still try to auto-listen even if audio play failed
-          setTimeout(() => {
-            autoStartListening()
-          }, 200)
-        })
+        // iOS Safari needs load() before play()
+        audio.load()
+
+        const playPromise = audio.play()
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.error('Audio play failed:', err)
+            setIsSpeaking(false)
+            setTimeout(() => {
+              autoStartListening()
+            }, 200)
+          })
+        }
       } else {
         console.log('No audio data received')
         setIsSpeaking(false)
@@ -228,8 +255,9 @@ export default function EmbeddedChat() {
     const text = messageText || input.trim()
     if (!text || isLoading) return
 
-    // Initialize AudioContext on user interaction (needed for mobile)
+    // Initialize AudioContext and unlock audio on user interaction (needed for mobile/iOS)
     initAudioContext()
+    unlockAudio()
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
@@ -260,8 +288,9 @@ export default function EmbeddedChat() {
   }
 
   const startListening = async () => {
-    // Initialize AudioContext on user interaction (needed for mobile)
+    // Initialize AudioContext and unlock audio on user interaction (needed for mobile/iOS)
     initAudioContext()
+    unlockAudio()
 
     if (!SpeechRecognition) {
       alert('Speech recognition is not supported in your browser. Please use Chrome.')
@@ -434,9 +463,10 @@ export default function EmbeddedChat() {
           type="button"
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
           onClick={() => {
-            initAudioContext(); // Initialize audio on user gesture
-            setVoiceEnabled(!voiceEnabled);
-            if (voiceEnabled) stopSpeaking();
+            initAudioContext()
+            unlockAudio() // Unlock iOS audio on user gesture
+            setVoiceEnabled(!voiceEnabled)
+            if (voiceEnabled) stopSpeaking()
           }}
         >
           {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
