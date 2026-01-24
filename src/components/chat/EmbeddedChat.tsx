@@ -183,17 +183,32 @@ export default function EmbeddedChat() {
           }, 200)
         }
 
-        audio.onerror = () => {
-          console.error('Audio playback error')
+        audio.onerror = (e) => {
+          console.error('Audio playback error:', e)
           setIsSpeaking(false)
+          // Still try to auto-listen even if audio failed
+          setTimeout(() => {
+            autoStartListening()
+          }, 200)
         }
 
         audio.play().catch(err => {
           console.error('Audio play failed:', err)
           setIsSpeaking(false)
+          // Still try to auto-listen even if audio play failed
+          setTimeout(() => {
+            autoStartListening()
+          }, 200)
         })
       } else {
+        console.log('No audio data received')
         setIsSpeaking(false)
+        // Still try to auto-listen if voice enabled
+        if (voiceEnabledRef.current) {
+          setTimeout(() => {
+            autoStartListening()
+          }, 200)
+        }
       }
     } catch (err) {
       console.error('Failed to speak:', err)
@@ -418,7 +433,11 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
-          onClick={() => { setVoiceEnabled(!voiceEnabled); if (voiceEnabled) stopSpeaking(); }}
+          onClick={() => {
+            initAudioContext(); // Initialize audio on user gesture
+            setVoiceEnabled(!voiceEnabled);
+            if (voiceEnabled) stopSpeaking();
+          }}
         >
           {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>

@@ -1140,6 +1140,9 @@ if (micStreamRef.current) {
 | 1.13 | - | Release mic stream tracks between interactions (fixes 4-5 exchange limit) |
 | 1.14 | - | Switch to HTML5 Audio only - Web Audio API conflicts with mic on mobile |
 | 1.15 | - | Confirmed hands-free mode working on both mobile and desktop browsers |
+| 1.16 | - | Fixed: Don't overwrite already-collected info (name from email address bug) |
+| 1.17 | - | Fixed: Don't extract name from messages containing @ (email context) |
+| 1.18 | - | Fixed: Added "LAST USER MESSAGE" to prompt to prevent AI repetition |
 
 ---
 

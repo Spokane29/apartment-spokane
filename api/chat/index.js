@@ -159,7 +159,7 @@ async function sendToLeadsAPI(leadData) {
   }
 }
 
-async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0) {
+async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0, lastUserMessage = '') {
   const { data: knowledgeBase } = await supabase
     .from('knowledge_base')
     .select('*')
@@ -237,14 +237,19 @@ Order: 1) Tour Date → 2) Tour Time → 3) Name → 4) Phone → 5) Email → 6
 CONFIRMATION (use when ALL 5 items collected):
 "${confirmationTemplate}"
 
+=== LAST USER MESSAGE ===
+"${lastUserMessage}"
+(Respond to THIS message. Do NOT repeat any previous question or response.)
+
 === ABSOLUTE RULES - VIOLATIONS ARE FAILURES ===
 1. NEVER say "Hi", "Hello", "What can I help you with" after message 1 - this is MID-CONVERSATION
 2. NEVER ask "what would you like to know" or "how can I help" during tour booking
 3. NEVER ask for info already marked with ✓ above
-4. MAXIMUM 2 sentences. No exclamation points ever.
-5. When you receive a NAME during tour booking, say "Thanks [name]." and ask for phone - NOTHING ELSE
-6. Stay on task - if booking a tour, keep collecting the missing info
-7. Don't use markdown formatting
+4. NEVER repeat a question you already asked in this conversation
+5. MAXIMUM 2 sentences. No exclamation points ever.
+6. When you receive a NAME during tour booking, say "Thanks [name]." and ask for phone - NOTHING ELSE
+7. Stay on task - if booking a tour, keep collecting the missing info
+8. Don't use markdown formatting
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
   }
 
@@ -267,12 +272,17 @@ ${hasEmail ? `✓ Email: ${collectedInfo.email}` : '○ Email: NOT YET'}
 ${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date}` : '○ Tour Date: NOT YET'}
 ${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time}` : '○ Tour Time: NOT YET'}
 
+=== LAST USER MESSAGE ===
+"${lastUserMessage}"
+(Respond to THIS. Don't repeat previous questions.)
+
 === ABSOLUTE RULES ===
 1. NEVER say "Hi" or greetings after message 1
 2. NEVER ask "what can I help with" during tour booking
 3. Max 2 sentences. No exclamation points.
-4. When given NAME during booking: "Thanks [name]." + ask for phone
-5. Order: tour date → tour time → name → phone → email → confirmation
+4. NEVER repeat a question you already asked
+5. When given NAME during booking: "Thanks [name]." + ask for phone
+6. Order: tour date → tour time → name → phone → email → confirmation
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
 }
 
@@ -280,26 +290,32 @@ function extractLeadInfo(messages) {
   const userText = messages.filter((m) => m.role === 'user').map((m) => m.content).join(' ');
   const leadInfo = {};
 
-  // Extract name - multiple patterns
-  const namePatterns = [
-    /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
-    /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
-    /name[:\s]+([A-Z][a-z]+)/i,
-    // Catch simple two-word names like "Joe Schmoe" or "joe schmoe"
-    /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
-  ];
-  for (const pattern of namePatterns) {
-    const match = userText.match(pattern);
-    if (match) {
-      // Capitalize first letter of each word
-      const name = match[1].split(' ')[0];
-      leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-      // Also capture last name if present
-      const parts = match[1].split(' ');
-      if (parts.length > 1) {
-        leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+  // Check if this message contains an email - if so, don't try to extract name
+  // (prevents extracting "mccoy" from "mccoy@gmail.com" as a name)
+  const containsEmail = /@/.test(userText);
+
+  // Extract name - multiple patterns (but NOT if message contains email)
+  if (!containsEmail) {
+    const namePatterns = [
+      /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
+      /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
+      /name[:\s]+([A-Z][a-z]+)/i,
+      // Catch simple two-word names like "Joe Schmoe" or "joe schmoe"
+      /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
+    ];
+    for (const pattern of namePatterns) {
+      const match = userText.match(pattern);
+      if (match) {
+        // Capitalize first letter of each word
+        const name = match[1].split(' ')[0];
+        leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        // Also capture last name if present
+        const parts = match[1].split(' ');
+        if (parts.length > 1) {
+          leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+        }
+        break;
       }
-      break;
     }
   }
 
@@ -372,15 +388,21 @@ export default async function handler(req, res) {
     session.messages.push({ role: 'user', content: message });
 
     // Extract lead info from this message
+    // IMPORTANT: Don't overwrite already-collected info
     const newLeadInfo = extractLeadInfo([{ role: 'user', content: message }]);
     if (newLeadInfo) {
-      session.collected_info = { ...session.collected_info, ...newLeadInfo };
+      // Only add NEW fields, never overwrite existing ones
+      for (const [key, value] of Object.entries(newLeadInfo)) {
+        if (!session.collected_info[key]) {
+          session.collected_info[key] = value;
+        }
+      }
     }
 
     // Get AI config for confirmation template
     const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
 
-    const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info, session.message_count);
+    const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info, session.message_count, message);
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 100, // Keep responses very short
