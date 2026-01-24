@@ -4,6 +4,7 @@ export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   useEffect(() => {
     fetchLeads();
@@ -14,6 +15,7 @@ export default function Leads() {
       const res = await fetch('/api/leads');
       const data = await res.json();
       setLeads(data);
+      setSelectedIds([]);
     } catch (err) {
       console.error('Failed to fetch leads:', err);
     } finally {
@@ -37,10 +39,47 @@ export default function Leads() {
   async function deleteLead(id) {
     if (!window.confirm('Are you sure you want to delete this lead?')) return;
     try {
-      await fetch(`/api/leads?id=${id}`, { method: 'DELETE' });
-      fetchLeads();
+      const res = await fetch(`/api/leads?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchLeads();
+      } else {
+        const data = await res.json();
+        alert('Failed to delete: ' + (data.error || 'Unknown error'));
+      }
     } catch (err) {
       console.error('Failed to delete lead:', err);
+      alert('Failed to delete lead');
+    }
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected lead(s)?`)) return;
+    try {
+      const res = await fetch(`/api/leads?ids=${selectedIds.join(',')}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchLeads();
+      } else {
+        const data = await res.json();
+        alert('Failed to delete: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Failed to delete leads:', err);
+      alert('Failed to delete leads');
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.length === leads.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(leads.map(l => l.id));
     }
   }
 
@@ -50,8 +89,24 @@ export default function Leads() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Leads</h2>
+        {selectedIds.length > 0 && (
+          <button
+            onClick={deleteSelected}
+            style={{
+              padding: '8px 16px',
+              background: '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Delete Selected ({selectedIds.length})
+          </button>
+        )}
       </div>
 
       {leads.length > 0 ? (
@@ -59,6 +114,13 @@ export default function Leads() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === leads.length && leads.length > 0}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Email</th>
@@ -70,7 +132,14 @@ export default function Leads() {
             </thead>
             <tbody>
               {leads.map((lead) => (
-                <tr key={lead.id}>
+                <tr key={lead.id} style={{ background: selectedIds.includes(lead.id) ? '#f0f9ff' : 'transparent' }}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(lead.id)}
+                      onChange={() => toggleSelect(lead.id)}
+                    />
+                  </td>
                   <td>
                     <strong>{lead.first_name} {lead.last_name}</strong>
                     <br />
@@ -110,9 +179,8 @@ export default function Leads() {
                         View
                       </button>
                       <button
-                        className="btn"
                         onClick={() => deleteLead(lead.id)}
-                        style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none' }}
+                        style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         Delete
                       </button>
@@ -191,9 +259,8 @@ export default function Leads() {
                 Close
               </button>
               <button
-                className="btn"
                 onClick={() => { deleteLead(selectedLead.id); setSelectedLead(null); }}
-                style={{ background: '#ef4444', color: 'white', border: 'none' }}
+                style={{ padding: '8px 16px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
               >
                 Delete Lead
               </button>

@@ -38,13 +38,26 @@ export default async function handler(req, res) {
     }
   } else if (req.method === 'DELETE') {
     try {
-      const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'Lead ID required' });
+      const { id, ids } = req.query;
 
-      const { error } = await supabase.from('leads').delete().eq('id', id);
-      if (error) throw error;
-      res.json({ success: true });
+      // Mass delete: ?ids=id1,id2,id3
+      if (ids) {
+        const idArray = ids.split(',');
+        const { error } = await supabase.from('leads').delete().in('id', idArray);
+        if (error) throw error;
+        return res.json({ success: true, deleted: idArray.length });
+      }
+
+      // Single delete: ?id=xxx
+      if (id) {
+        const { error } = await supabase.from('leads').delete().eq('id', id);
+        if (error) throw error;
+        return res.json({ success: true });
+      }
+
+      return res.status(400).json({ error: 'Lead ID(s) required' });
     } catch (error) {
+      console.error('Delete error:', error);
       res.status(500).json({ error: error.message });
     }
   } else {
