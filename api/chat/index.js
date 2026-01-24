@@ -363,14 +363,38 @@ function extractLeadInfo(messages) {
   return Object.keys(leadInfo).length > 0 ? leadInfo : null;
 }
 
+// Preprocess voice input to handle spoken emails and phone numbers
+function preprocessVoiceInput(text) {
+  let result = text;
+
+  // Convert spoken emails: "joe at gmail dot com" → "joe@gmail.com"
+  result = result.replace(/\s+at\s+/gi, '@');
+  result = result.replace(/\s+dot\s+/gi, '.');
+
+  // Common voice misheards for email
+  result = result.replace(/\bgmail\b/gi, 'gmail');
+  result = result.replace(/\byahoo\b/gi, 'yahoo');
+  result = result.replace(/\boutlook\b/gi, 'outlook');
+  result = result.replace(/\bhotmail\b/gi, 'hotmail');
+
+  // Remove spaces around @ and . in email-like strings
+  result = result.replace(/\s*@\s*/g, '@');
+  result = result.replace(/(\w)\s*\.\s*(com|org|net|edu|io)/gi, '$1.$2');
+
+  return result;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { message, sessionId } = req.body;
+    let { message, sessionId } = req.body;
     if (!message) return res.status(400).json({ error: 'Message required' });
+
+    // Preprocess message for voice input
+    message = preprocessVoiceInput(message);
 
     // Get or create session from database
     const currentSessionId = sessionId || crypto.randomUUID();
