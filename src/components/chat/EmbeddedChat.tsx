@@ -105,6 +105,40 @@ export default function EmbeddedChat() {
     }
   }
 
+  // Preprocess voice input to fix common speech recognition mistakes
+  const preprocessVoiceText = (text: string): string => {
+    let result = text
+
+    // Fix spoken emails: "penny at gmail dot com" → "penny@gmail.com"
+    result = result.replace(/\s+at\s+/gi, '@')
+    result = result.replace(/\s+dot\s+/gi, '.')
+
+    // Common misheards for "at"
+    result = result.replace(/\s+add\s+/gi, '@')  // "add" sounds like "at"
+    result = result.replace(/\s+hat\s+/gi, '@')  // "hat" misheard
+
+    // Fix gmail/yahoo/hotmail variations
+    result = result.replace(/@\s*g\s*mail/gi, '@gmail')
+    result = result.replace(/@\s*gmail/gi, '@gmail')
+    result = result.replace(/@\s*yahoo/gi, '@yahoo')
+    result = result.replace(/@\s*hotmail/gi, '@hotmail')
+    result = result.replace(/@\s*outlook/gi, '@outlook')
+    result = result.replace(/@\s*icloud/gi, '@icloud')
+
+    // Fix .com variations
+    result = result.replace(/dot\s*com$/gi, '.com')
+    result = result.replace(/\.\s*com$/gi, '.com')
+    result = result.replace(/\s+calm$/gi, '.com')  // "calm" sounds like "com"
+    result = result.replace(/\s+come$/gi, '.com')  // "come" sounds like "com"
+
+    // Remove spaces around @ and .
+    result = result.replace(/\s*@\s*/g, '@')
+    result = result.replace(/(\w)\s*\.\s*(com|org|net|edu|io)$/gi, '$1.$2')
+
+    console.log('Voice preprocessed:', text, '→', result)
+    return result
+  }
+
   const handleVoiceInput = (text: string) => {
     console.log('handleVoiceInput:', text)
     // Clear the auto-stop timeout since we got input
@@ -131,7 +165,9 @@ export default function EmbeddedChat() {
       console.log('Released mic stream after voice input')
     }
 
-    sendMessage(text)
+    // Preprocess voice input to fix email formatting
+    const processedText = preprocessVoiceText(text)
+    sendMessage(processedText)
   }
 
   // Track if audio has been unlocked on iOS
