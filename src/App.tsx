@@ -179,13 +179,13 @@ function App() {
               <div className="lg:col-span-2">
                 <div id="contact-form">
                   <Card className="shadow-lg border border-primary/20 overflow-hidden">
-                    <div className="bg-primary text-white p-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <MessageCircle className="w-4 h-4" />
-                        <h3 className="font-bold text-sm">Chat with Us</h3>
+                    <div className="bg-primary text-white p-3">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="w-5 h-5" />
+                        <h3 className="font-bold text-base">Your Personal AI Assistant</h3>
                       </div>
-                      <p className="text-primary-foreground/80 text-[11px]">
-                        AI assistant - I can answer questions and schedule tours
+                      <p className="text-primary-foreground/90 text-sm mt-1">
+                        I can answer questions and schedule tours
                       </p>
                     </div>
                     <CardContent className="p-3">

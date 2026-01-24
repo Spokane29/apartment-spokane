@@ -35,7 +35,7 @@ export default function EmbeddedChat() {
       setMessages([{ id: Date.now(), role: 'assistant', content: data.message }])
     } catch (err) {
       console.error('Failed to init chat:', err)
-      setMessages([{ id: Date.now(), role: 'assistant', content: "Hi! I'm the South Oak Apartments AI assistant. How can I help you today?" }])
+      setMessages([{ id: Date.now(), role: 'assistant', content: "Hi! I'm the virtual assistant for South Oak Apartments. Can I schedule a tour or answer any questions?" }])
     } finally {
       setIsLoading(false)
     }
