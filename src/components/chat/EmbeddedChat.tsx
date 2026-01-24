@@ -169,29 +169,35 @@ export default function EmbeddedChat() {
     }
   }
 
-  const startListening = () => {
+  const startListening = async () => {
     console.log('startListening called')
 
     if (!SpeechRecognition) {
-      console.log('SpeechRecognition not supported')
-      alert('Speech recognition is not supported in your browser')
+      alert('Speech recognition is not supported in your browser. Please use Chrome.')
       return
     }
 
     if (!recognitionRef.current) {
-      console.log('recognitionRef is null')
+      alert('Speech recognition failed to initialize')
+      return
+    }
+
+    // Request microphone permission first
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      alert('Microphone access denied. Please allow microphone access to use voice input.')
       return
     }
 
     stopSpeaking()
     setIsListening(true)
-    console.log('Starting recognition...')
 
     try {
       recognitionRef.current.start()
-      console.log('Recognition started')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start listening:', err)
+      alert('Failed to start speech recognition: ' + err.message)
       setIsListening(false)
     }
   }
@@ -252,10 +258,7 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={() => {
-            console.log('Mic button clicked, isListening:', isListening)
-            isListening ? stopListening() : startListening()
-          }}
+          onClick={() => isListening ? stopListening() : startListening()}
           disabled={isLoading}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
