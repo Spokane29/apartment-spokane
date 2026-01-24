@@ -124,9 +124,13 @@ export default function EmbeddedChat() {
   }
 
   const speakText = async (text: string) => {
-    if (!voiceEnabled) return
+    if (!voiceEnabled) {
+      console.log('Voice disabled, skipping speech')
+      return
+    }
 
     try {
+      console.log('Speaking text:', text.substring(0, 50) + '...')
       setIsSpeaking(true)
       const res = await fetch('/api/voice/speak', {
         method: 'POST',
@@ -135,16 +139,20 @@ export default function EmbeddedChat() {
       })
 
       if (!res.ok) {
-        console.error('Voice API error')
+        const errorText = await res.text()
+        console.error('Voice API error:', res.status, errorText)
         setIsSpeaking(false)
         return
       }
 
       const data = await res.json()
+      console.log('Voice API response received, audio length:', data.audio?.length || 0)
       if (data.audio) {
+        console.log('Creating audio element...')
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
         audio.onended = () => {
+          console.log('Audio finished playing')
           setIsSpeaking(false)
           // Auto-start listening after AI finishes speaking
           if (voiceEnabled && SpeechRecognition) {
@@ -157,8 +165,16 @@ export default function EmbeddedChat() {
             }
           }
         }
-        audio.onerror = () => setIsSpeaking(false)
+        audio.onerror = (e) => {
+          console.error('Audio playback error:', e)
+          setIsSpeaking(false)
+        }
+        console.log('Playing audio...')
         await audio.play()
+        console.log('Audio play started')
+      } else {
+        console.error('No audio data in response')
+        setIsSpeaking(false)
       }
     } catch (err) {
       console.error('Failed to speak:', err)
