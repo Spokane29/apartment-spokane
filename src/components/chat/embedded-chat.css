@@ -142,8 +142,10 @@
 }
 
 .voice-toggle {
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: 50%;
   background: #e2e8f0;
   border: none;
@@ -153,9 +155,14 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.voice-toggle:hover {
+.voice-toggle:hover,
+.voice-toggle:active {
   background: #cbd5e1;
 }
 
@@ -165,8 +172,10 @@
 }
 
 .mic-button {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   background: #e2e8f0;
   border: none;
@@ -176,9 +185,14 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.mic-button:hover:not(:disabled) {
+.mic-button:hover:not(:disabled),
+.mic-button:active:not(:disabled) {
   background: #cbd5e1;
 }
 

@@ -255,9 +255,10 @@ export default function EmbeddedChat() {
           type="button"
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
           onClick={() => { setVoiceEnabled(!voiceEnabled); if (voiceEnabled) stopSpeaking(); }}
+          onTouchEnd={(e) => { e.preventDefault(); setVoiceEnabled(!voiceEnabled); if (voiceEnabled) stopSpeaking(); }}
           title={voiceEnabled ? 'Disable voice responses' : 'Enable voice responses'}
         >
-          {voiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
       </div>
 
@@ -292,10 +293,11 @@ export default function EmbeddedChat() {
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
           onClick={toggleListening}
+          onTouchEnd={(e) => { e.preventDefault(); toggleListening(); }}
           disabled={isLoading}
           title={isListening ? 'Stop listening' : 'Speak your message'}
         >
-          {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
         <input
           type="text"
