@@ -7,9 +7,13 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 // In-memory session store (for serverless, consider using Redis or database)
 const sessions = new Map();
 
-// Send lead to LeasingVoice API
-async function sendToLeasingVoice(leadData) {
-  const apiUrl = 'https://apartment-spokane.com/api/leads/external';
+// Send lead to external leads API
+async function sendToLeadsAPI(leadData) {
+  // Use Vercel URL or fallback to production domain
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'https://apartment-spokane.vercel.app';
+  const apiUrl = `${baseUrl}/api/leads/external`;
 
   const payload = {
     firstName: leadData.first_name || '',
@@ -25,19 +29,21 @@ async function sendToLeasingVoice(leadData) {
   };
 
   try {
+    console.log('Sending lead to:', apiUrl);
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
+      redirect: 'follow',
       body: JSON.stringify(payload)
     });
 
     const result = await response.json();
-    console.log('LeasingVoice response:', result);
+    console.log('Leads API response:', result);
     return { success: response.ok, data: result };
   } catch (error) {
-    console.error('LeasingVoice error:', error.message);
+    console.error('Leads API error:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -211,7 +217,7 @@ export default async function handler(req, res) {
     // Send to LeasingVoice when we have minimum info (only once)
     if (hasMinimumInfo && !session.leadSentToLeasingVoice) {
       console.log('Sending lead to LeasingVoice:', info);
-      const result = await sendToLeasingVoice({
+      const result = await sendToLeadsAPI({
         first_name: info.first_name,
         last_name: info.last_name || '',
         phone: info.phone,
