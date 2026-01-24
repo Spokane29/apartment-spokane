@@ -13,6 +13,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' });
   }
 
+  // Debug: log key prefix to verify it's loaded
+  console.log('ElevenLabs key prefix:', ELEVEN_LABS_API_KEY.substring(0, 10) + '...');
+
   // Default voice - "Rachel" (friendly female voice good for customer service)
   // You can change this to any ElevenLabs voice ID
   const VOICE_ID = process.env.ELEVEN_LABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
@@ -40,8 +43,8 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('ElevenLabs error:', error);
-      return res.status(response.status).json({ error: 'Failed to generate speech' });
+      console.error('ElevenLabs error:', response.status, error);
+      return res.status(response.status).json({ error: 'Failed to generate speech', details: error });
     }
 
     // Get audio buffer
