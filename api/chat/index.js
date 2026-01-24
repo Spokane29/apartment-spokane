@@ -207,12 +207,15 @@ ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour 
 CRITICAL RULES - FOLLOW EXACTLY:
 - MAXIMUM 2 sentences per response. No exceptions.
 - ABSOLUTELY NO exclamation points. Never use "!" in responses. Use periods only.
-- When user agrees to tour (yes, sure, yeah, ok), immediately ask for tour date - don't ask what they want to know
+- NEVER restart the conversation or say "Hi there" or greetings mid-conversation
+- NEVER ask "what would you like to know" after user already started tour booking
+- When user agrees to tour (yes, sure, yeah, ok), immediately ask for tour date
 - Be conversational but direct. Get to the point.
 - NEVER ask for info marked as collected above
 - NEVER repeat a question from earlier in this conversation
 - Ask for ONE missing piece at a time in order: tour date → tour time → name → phone → email
-- If user just gave their name (like "Joe Smith"), acknowledge it and ask for the next missing item
+- If input doesn't look valid (like "test.com" for email), politely ask them to try again with correct format
+- If user just gave info, acknowledge it and ask for the next missing item
 - Stay fair housing compliant
 - Don't use markdown formatting
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
@@ -278,9 +281,17 @@ function extractLeadInfo(messages) {
   const phoneMatch = userText.match(/\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})\b/);
   if (phoneMatch) leadInfo.phone = phoneMatch[1].replace(/[-.\s]/g, '');
 
-  // Extract email
+  // Extract email - be more permissive
   const emailMatch = userText.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
-  if (emailMatch) leadInfo.email = emailMatch[1].toLowerCase();
+  if (emailMatch) {
+    leadInfo.email = emailMatch[1].toLowerCase();
+  } else {
+    // Also try to match something that looks like an email attempt (like "test at gmail.com" or just contains @)
+    const looseEmailMatch = userText.match(/([a-zA-Z0-9._%+-]+\s*(?:@|at)\s*[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (looseEmailMatch) {
+      leadInfo.email = looseEmailMatch[1].replace(/\s*at\s*/i, '@').toLowerCase();
+    }
+  }
 
   // Extract tour date
   const datePattern = /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|\d{1,2}\/\d{1,2})/i;
