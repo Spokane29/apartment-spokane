@@ -206,13 +206,15 @@ ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour 
 
 CRITICAL RULES - FOLLOW EXACTLY:
 - MAXIMUM 2 sentences per response. No exceptions.
-- Be conversational, not salesy. No exclamation points.
-- Don't oversell - just answer the question briefly
-- When suggesting a tour, just say "Want to schedule a tour?" - nothing more
-- Never make up information not in the knowledge base
+- ABSOLUTELY NO exclamation points. Never use "!" in responses. Use periods only.
+- When user agrees to tour (yes, sure, yeah, ok), immediately ask for tour date - don't ask what they want to know
+- Be conversational but direct. Get to the point.
+- NEVER ask for info marked as collected above
+- NEVER repeat a question from earlier in this conversation
+- Ask for ONE missing piece at a time in order: tour date → tour time → name → phone → email
+- If user just gave their name (like "Joe Smith"), acknowledge it and ask for the next missing item
 - Stay fair housing compliant
 - Don't use markdown formatting
-- NEVER ask for info already collected above
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
   }
 
@@ -236,7 +238,12 @@ ${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
 ${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
 ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
 
-CRITICAL: Maximum 2 sentences per response. Be brief and conversational, not salesy.
+CRITICAL RULES:
+- Maximum 2 sentences. NEVER use exclamation points.
+- When user agrees to tour, ask for tour date immediately
+- NEVER ask for info already collected above
+- NEVER repeat questions from this conversation
+- Ask ONE thing at a time: tour date → tour time → name → phone → email
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
 }
 
@@ -246,14 +253,23 @@ function extractLeadInfo(messages) {
 
   // Extract name - multiple patterns
   const namePatterns = [
-    /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+)/i,
-    /^([A-Z][a-z]+)$/m,
-    /name[:\s]+([A-Z][a-z]+)/i
+    /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
+    /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
+    /name[:\s]+([A-Z][a-z]+)/i,
+    // Catch simple two-word names like "Joe Schmoe" or "joe schmoe"
+    /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
   ];
   for (const pattern of namePatterns) {
     const match = userText.match(pattern);
     if (match) {
-      leadInfo.first_name = match[1];
+      // Capitalize first letter of each word
+      const name = match[1].split(' ')[0];
+      leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+      // Also capture last name if present
+      const parts = match[1].split(' ');
+      if (parts.length > 1) {
+        leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+      }
       break;
     }
   }
