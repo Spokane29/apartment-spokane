@@ -22,6 +22,7 @@ export default function EmbeddedChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUnlocked = useRef(false)
 
   useEffect(() => {
     initChat()
@@ -85,6 +86,20 @@ export default function EmbeddedChat() {
     sendMessage(text)
   }
 
+  // Unlock audio on mobile - must be called from user gesture
+  const unlockAudio = () => {
+    if (audioUnlocked.current) return
+
+    // Create and play silent audio to unlock
+    const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=')
+    audio.play().then(() => {
+      audioUnlocked.current = true
+      console.log('Audio unlocked for mobile')
+    }).catch(() => {
+      // Ignore - will try again on next interaction
+    })
+  }
+
   const speakText = async (text: string) => {
     if (!voiceEnabled) return
 
@@ -141,6 +156,9 @@ export default function EmbeddedChat() {
     const text = messageText || input.trim()
     if (!text || isLoading) return
 
+    // Unlock audio on user interaction (needed for mobile)
+    unlockAudio()
+
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
     setInput('')
@@ -170,7 +188,8 @@ export default function EmbeddedChat() {
   }
 
   const startListening = async () => {
-    console.log('startListening called')
+    // Unlock audio on user interaction (needed for mobile)
+    unlockAudio()
 
     if (!SpeechRecognition) {
       alert('Speech recognition is not supported in your browser. Please use Chrome.')
