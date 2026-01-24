@@ -204,8 +204,11 @@ ${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
 ${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
 ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
 
-ADDITIONAL RULES:
-- Keep ALL responses to 2-3 sentences max
+CRITICAL RULES - FOLLOW EXACTLY:
+- MAXIMUM 2 sentences per response. No exceptions.
+- Be conversational, not salesy. No exclamation points.
+- Don't oversell - just answer the question briefly
+- When suggesting a tour, just say "Want to schedule a tour?" - nothing more
 - Never make up information not in the knowledge base
 - Stay fair housing compliant
 - Don't use markdown formatting
@@ -233,7 +236,7 @@ ${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
 ${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
 ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
 
-Keep responses SHORT. NEVER ask for info already collected.
+CRITICAL: Maximum 2 sentences per response. Be brief and conversational, not salesy.
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
 }
 
@@ -327,7 +330,7 @@ export default async function handler(req, res) {
     const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info);
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 200, // Reduced to encourage shorter responses
+      max_tokens: 100, // Keep responses very short
       system: systemPrompt,
       messages: session.messages,
     });

@@ -34,8 +34,11 @@ export default function EmbeddedChat() {
 
       recognitionRef.current.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript
-        setInput(transcript)
         setIsListening(false)
+        // Auto-send the message after speech recognition
+        if (transcript.trim()) {
+          sendMessage(transcript.trim())
+        }
       }
 
       recognitionRef.current.onerror = (event: any) => {
