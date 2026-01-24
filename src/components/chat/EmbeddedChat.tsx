@@ -22,32 +22,49 @@ export default function EmbeddedChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const listeningTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const shouldRestartListening = useRef(false)
 
   useEffect(() => {
     initChat()
     // Initialize speech recognition
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition()
-      recognitionRef.current.continuous = false
+      recognitionRef.current.continuous = true
       recognitionRef.current.interimResults = false
       recognitionRef.current.lang = 'en-US'
 
       recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript
-        setIsListening(false)
-        // Auto-send the message after speech recognition
-        if (transcript.trim()) {
-          sendMessage(transcript.trim())
+        // Get the latest result
+        const lastResult = event.results[event.results.length - 1]
+        if (lastResult.isFinal) {
+          const transcript = lastResult[0].transcript
+          // Stop listening and send
+          if (transcript.trim()) {
+            stopListeningAndSend(transcript.trim())
+          }
         }
       }
 
       recognitionRef.current.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error)
-        setIsListening(false)
+        if (event.error !== 'no-speech') {
+          setIsListening(false)
+          clearListeningTimeout()
+        }
       }
 
       recognitionRef.current.onend = () => {
-        setIsListening(false)
+        // Restart if we should keep listening (voice mode active)
+        if (shouldRestartListening.current && !isLoading) {
+          try {
+            recognitionRef.current?.start()
+          } catch (e) {
+            setIsListening(false)
+          }
+        } else {
+          setIsListening(false)
+        }
       }
     }
 
@@ -55,8 +72,35 @@ export default function EmbeddedChat() {
       if (recognitionRef.current) {
         recognitionRef.current.abort()
       }
+      clearListeningTimeout()
     }
   }, [])
+
+  const clearListeningTimeout = () => {
+    if (listeningTimeoutRef.current) {
+      clearTimeout(listeningTimeoutRef.current)
+      listeningTimeoutRef.current = null
+    }
+  }
+
+  const stopListeningAndSend = (text: string) => {
+    clearListeningTimeout()
+    shouldRestartListening.current = false
+    recognitionRef.current?.stop()
+    setIsListening(false)
+    sendMessage(text)
+  }
+
+  const startListeningWithTimeout = () => {
+    clearListeningTimeout()
+    shouldRestartListening.current = true
+    // Auto-stop after 15 seconds of no final result
+    listeningTimeoutRef.current = setTimeout(() => {
+      shouldRestartListening.current = false
+      recognitionRef.current?.stop()
+      setIsListening(false)
+    }, 15000)
+  }
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -100,7 +144,19 @@ export default function EmbeddedChat() {
       if (data.audio) {
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
-        audio.onended = () => setIsSpeaking(false)
+        audio.onended = () => {
+          setIsSpeaking(false)
+          // Auto-start listening after AI finishes speaking
+          if (voiceEnabled && SpeechRecognition) {
+            startListeningWithTimeout()
+            try {
+              recognitionRef.current?.start()
+              setIsListening(true)
+            } catch (e) {
+              console.error('Failed to restart listening:', e)
+            }
+          }
+        }
         audio.onerror = () => setIsSpeaking(false)
         await audio.play()
       }
@@ -157,10 +213,13 @@ export default function EmbeddedChat() {
     }
 
     if (isListening) {
+      shouldRestartListening.current = false
+      clearListeningTimeout()
       recognitionRef.current?.stop()
       setIsListening(false)
     } else {
       stopSpeaking() // Stop any playing audio
+      startListeningWithTimeout()
       recognitionRef.current?.start()
       setIsListening(true)
     }
