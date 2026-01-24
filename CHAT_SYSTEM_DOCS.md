@@ -776,8 +776,23 @@ const autoStartListening = (retryCount = 0) => {
   const isVoiceEnabled = voiceEnabledRef.current
   if (!isVoiceEnabled || !SpeechRecognition) return
 
+  // Clear any existing timeout
+  if (listenTimeoutRef.current) {
+    clearTimeout(listenTimeoutRef.current)
+    listenTimeoutRef.current = null
+  }
+
+  // CRITICAL: Fully cleanup old recognition before creating new
+  if (recognitionRef.current) {
+    try { recognitionRef.current.abort() } catch (e) {}
+    recognitionRef.current = null
+  }
+
+  // Longer delay for mobile - give browser time to release mic
+  const delay = retryCount === 0 ? 500 : 300
+
   setTimeout(() => {
-    // CRITICAL: Recreate recognition to avoid stale state on mobile
+    // ALWAYS create fresh recognition instance
     recognitionRef.current = createRecognition()
     if (!recognitionRef.current) return
 
@@ -791,12 +806,12 @@ const autoStartListening = (retryCount = 0) => {
         recognitionRef.current?.stop()
       }, 5000)
     } catch (err) {
-      // Retry once with fresh instance
-      if (retryCount < 1) {
-        setTimeout(() => autoStartListening(retryCount + 1), 500)
+      // Retry up to 2 times
+      if (retryCount < 2) {
+        setTimeout(() => autoStartListening(retryCount + 1), 600)
       }
     }
-  }, retryCount === 0 ? 300 : 100)
+  }, delay)
 }
 ```
 
@@ -1064,6 +1079,7 @@ const autoStartListening = (retryCount = 0) => {
 | 1.8 | - | Added conversation state tracking to prevent AI reset during tour booking |
 | 1.9 | - | Fixed stale closure bug in auto-listen (voiceEnabledRef) |
 | 1.10 | - | Fixed mobile recognition dying after 2 exchanges (recreate instance each time) |
+| 1.11 | - | More aggressive mobile fix: longer delays, abort+null cleanup, 2 retries |
 
 ---
 
