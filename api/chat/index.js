@@ -239,17 +239,26 @@ CONFIRMATION (use when ALL 5 items collected):
 
 === LAST USER MESSAGE ===
 "${lastUserMessage}"
-(Respond to THIS message. Do NOT repeat any previous question or response.)
+(Respond to THIS message. Do NOT restart the conversation.)
 
-=== ABSOLUTE RULES - VIOLATIONS ARE FAILURES ===
-1. NEVER say "Hi", "Hello", "What can I help you with" after message 1 - this is MID-CONVERSATION
-2. NEVER ask "what would you like to know" or "how can I help" during tour booking
-3. NEVER ask for info already marked with ✓ above
-4. NEVER repeat a question you already asked in this conversation
-5. MAXIMUM 2 sentences. No exclamation points ever.
-6. When you receive a NAME during tour booking, say "Thanks [name]." and ask for phone - NOTHING ELSE
-7. Stay on task - if booking a tour, keep collecting the missing info
-8. Don't use markdown formatting
+=== CRITICAL: NEVER DO THESE (instant failure) ===
+- NEVER say "Hi there", "Hello", "Hi!" - THIS IS MID-CONVERSATION
+- NEVER say "What would you like to know" or "How can I help"
+- NEVER ask for info already marked with ✓ above
+- NEVER use exclamation points
+
+=== IF INPUT IS UNCLEAR OR INVALID ===
+- Ask them to clarify or re-enter (e.g., "Could you provide a valid email address?")
+- Do NOT restart the conversation
+- Do NOT say "Hi" or greet them again
+- Stay in the current flow
+
+=== RULES ===
+1. Max 2 sentences per response
+2. No exclamation points ever
+3. When booking tour: collect date → time → name → phone → email → confirm
+4. If user gives invalid input, ask them to try again - don't restart
+5. Stay on task - keep collecting info until tour is booked
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
   }
 
@@ -274,15 +283,17 @@ ${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time}` : '○ Tour Time: NO
 
 === LAST USER MESSAGE ===
 "${lastUserMessage}"
-(Respond to THIS. Don't repeat previous questions.)
+(Respond to THIS. Do NOT restart conversation.)
 
-=== ABSOLUTE RULES ===
-1. NEVER say "Hi" or greetings after message 1
-2. NEVER ask "what can I help with" during tour booking
-3. Max 2 sentences. No exclamation points.
-4. NEVER repeat a question you already asked
-5. When given NAME during booking: "Thanks [name]." + ask for phone
-6. Order: tour date → tour time → name → phone → email → confirmation
+=== CRITICAL: NEVER DO THESE ===
+- NEVER say "Hi there", "Hello", "Hi!"
+- NEVER say "What would you like to know"
+- NEVER use exclamation points
+
+=== RULES ===
+1. Max 2 sentences. No exclamation points.
+2. If input unclear, ask to clarify - don't restart
+3. Order: tour date → time → name → phone → email → confirm
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
 }
 
