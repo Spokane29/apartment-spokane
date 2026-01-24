@@ -22,7 +22,7 @@ export default function EmbeddedChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioUnlocked = useRef(false)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -99,18 +99,20 @@ export default function EmbeddedChat() {
     sendMessage(text)
   }
 
-  // Unlock audio on mobile - must be called from user gesture
-  const unlockAudio = () => {
-    if (audioUnlocked.current) return
+  // Initialize AudioContext on user gesture (required for mobile)
+  const initAudioContext = () => {
+    if (audioContextRef.current) return audioContextRef.current
 
-    // Create and play silent audio to unlock
-    const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=')
-    audio.play().then(() => {
-      audioUnlocked.current = true
-      console.log('Audio unlocked for mobile')
-    }).catch(() => {
-      // Ignore - will try again on next interaction
-    })
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext
+    if (AudioContextClass) {
+      audioContextRef.current = new AudioContextClass()
+      // Resume if suspended
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume()
+      }
+      console.log('AudioContext initialized')
+    }
+    return audioContextRef.current
   }
 
   const speakText = async (text: string) => {
@@ -132,13 +134,48 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
+        // Try Web Audio API first (more reliable on mobile)
+        const ctx = audioContextRef.current
+        if (ctx) {
+          try {
+            // Resume context if suspended
+            if (ctx.state === 'suspended') {
+              await ctx.resume()
+            }
+
+            // Decode base64 to array buffer
+            const binaryString = atob(data.audio)
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+
+            const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0))
+            const source = ctx.createBufferSource()
+            source.buffer = audioBuffer
+            source.connect(ctx.destination)
+
+            source.onended = () => {
+              console.log('Audio ended, starting auto-listen')
+              setIsSpeaking(false)
+              autoStartListening()
+            }
+
+            source.start()
+            console.log('Playing via Web Audio API')
+            return
+          } catch (e) {
+            console.log('Web Audio failed, trying HTML5:', e)
+          }
+        }
+
+        // Fallback to HTML5 Audio
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
 
         audio.onended = () => {
           console.log('Audio ended, starting auto-listen')
           setIsSpeaking(false)
-          // Auto-start listening after AI finishes speaking
           autoStartListening()
         }
 
@@ -172,8 +209,8 @@ export default function EmbeddedChat() {
     const text = messageText || input.trim()
     if (!text || isLoading) return
 
-    // Unlock audio on user interaction (needed for mobile)
-    unlockAudio()
+    // Initialize AudioContext on user interaction (needed for mobile)
+    initAudioContext()
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
@@ -204,8 +241,8 @@ export default function EmbeddedChat() {
   }
 
   const startListening = async () => {
-    // Unlock audio on user interaction (needed for mobile)
-    unlockAudio()
+    // Initialize AudioContext on user interaction (needed for mobile)
+    initAudioContext()
 
     if (!SpeechRecognition) {
       alert('Speech recognition is not supported in your browser. Please use Chrome.')
