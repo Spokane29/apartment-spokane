@@ -5,6 +5,7 @@ export default function Settings() {
     assistant_name: 'Sona',
     greeting_message: '',
     personality_rules: '',
+    confirmation_template: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,6 +24,7 @@ export default function Settings() {
           assistant_name: data.assistant_name || 'Sona',
           greeting_message: data.greeting_message || '',
           personality_rules: data.personality_rules || '',
+          confirmation_template: data.confirmation_template || "Got it, {name}! You're scheduled for {tour_date} at {tour_time}. Steve will reach out at {phone} to confirm. See you soon!",
         });
       }
     } catch (err) {
@@ -97,6 +99,19 @@ export default function Settings() {
           />
           <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
             Guidelines for how the AI should communicate. These are included in the AI's system prompt.
+          </small>
+        </div>
+
+        <div className="form-group">
+          <label>Tour Confirmation Message</label>
+          <textarea
+            value={config.confirmation_template}
+            onChange={(e) => setConfig({ ...config, confirmation_template: e.target.value })}
+            placeholder="Thanks {name}! Here's what I have: Phone: {phone}, Email: {email}, Tour: {tour_date} at {tour_time}. You'll receive a confirmation shortly. See you then!"
+            style={{ minHeight: '100px' }}
+          />
+          <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
+            Message sent after collecting tour info. Use placeholders: {'{name}'}, {'{phone}'}, {'{email}'}, {'{tour_date}'}, {'{tour_time}'}
           </small>
         </div>
 

@@ -60,7 +60,7 @@ async function buildSystemPrompt(aiConfig) {
   // Get confirmation template (stored separately or use default)
   const templateEntry = (knowledgeBase || []).find(e => e.category === 'template');
   const confirmationTemplate = templateEntry?.content ||
-    "Got it, {name}! You're scheduled for {tour_date}. Steve will reach out at {phone} to confirm. See you soon!";
+    "Thanks {name}! Here's what I have: Phone: {phone}, Email: {email}, Tour: {tour_date} at {tour_time}. You'll receive a confirmation shortly. See you then!";
 
   // Combine all knowledge base entries (excluding template) into one document
   const knowledgeContent = (knowledgeBase || [])

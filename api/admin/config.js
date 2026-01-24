@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-const DEFAULT_CONFIRMATION = "Got it, {name}! You're scheduled for {tour_date} at {tour_time}. Steve will reach out at {phone} to confirm. See you soon!";
+const DEFAULT_CONFIRMATION = "Thanks {name}! Here's what I have: Phone: {phone}, Email: {email}, Tour: {tour_date} at {tour_time}. You'll receive a confirmation shortly. See you then!";
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
