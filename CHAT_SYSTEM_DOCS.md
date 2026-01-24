@@ -817,6 +817,36 @@ const autoStartListening = (retryCount = 0) => {
 
 **Why recreate recognition each time:** Mobile browsers (especially Safari) can get the SpeechRecognition object into a bad state after multiple start/stop cycles. Creating a fresh instance each time is more reliable than reusing the same object.
 
+### Critical Mobile Considerations
+
+For reliable hands-free on mobile, you must also:
+
+1. **Suspend AudioContext after playback** - Release audio resources before using mic:
+```typescript
+source.onended = async () => {
+  setIsSpeaking(false)
+  // CRITICAL: Suspend to release audio resources
+  await ctx.suspend()
+  autoStartListening()
+}
+```
+
+2. **Re-request mic permission before each auto-listen** - Mobile can silently lose mic access:
+```typescript
+const autoStartListening = async () => {
+  // Re-request to ensure we still have access
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (err) {
+    console.error('Mic permission lost')
+    return
+  }
+  // ... then create recognition and start
+}
+```
+
+3. **Use longer delays on mobile** - 600ms initial, 400ms on retry gives browser time to release resources.
+
 ---
 
 ## Lead Capture Flow
@@ -997,6 +1027,7 @@ const autoStartListening = (retryCount = 0) => {
 | Mic not working on mobile | Permission not granted | Request permission explicitly |
 | Auto-listen stops after first exchange | Stale closure in callback | Use `voiceEnabledRef` instead of state in callbacks |
 | Auto-listen dies after 2-3 exchanges | Recognition object in bad state | Recreate recognition instance each time with `createRecognition()` |
+| Auto-listen dies after 3+ exchanges | AudioContext holding mic resources | Suspend AudioContext after audio ends, re-request getUserMedia |
 
 ### AI Issues
 
@@ -1080,6 +1111,7 @@ const autoStartListening = (retryCount = 0) => {
 | 1.9 | - | Fixed stale closure bug in auto-listen (voiceEnabledRef) |
 | 1.10 | - | Fixed mobile recognition dying after 2 exchanges (recreate instance each time) |
 | 1.11 | - | More aggressive mobile fix: longer delays, abort+null cleanup, 2 retries |
+| 1.12 | - | Critical fix: suspend AudioContext after playback, re-request mic permission |
 
 ---
 
