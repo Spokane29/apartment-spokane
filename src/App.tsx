@@ -18,8 +18,6 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Calendar,
-  Sparkles,
   MessageCircle,
 } from 'lucide-react'
 
@@ -79,18 +77,6 @@ function App() {
           </a>
         </div>
       </header>
-
-      {/* Urgency Banner */}
-      <div className="bg-gradient-to-r from-primary via-primary/90 to-primary text-white py-2 md:py-2.5 px-3 overflow-hidden">
-        <div className="w-full max-w-6xl mx-auto flex items-center justify-center gap-2 text-sm md:text-base font-semibold text-center">
-          <Sparkles className="w-4 h-4 animate-bounce" />
-          <span className="animate-pulse">
-            <strong className="text-yellow-300">Move-in Special:</strong> Move in by Feb 1 & get{' '}
-            <strong className="text-yellow-300">$400 off</strong> first month!
-          </span>
-          <Sparkles className="w-4 h-4 animate-bounce" />
-        </div>
-      </div>
 
       <main>
         {/* Hero Section */}
@@ -199,7 +185,7 @@ function App() {
                         <h3 className="font-bold text-sm">Chat with Us</h3>
                       </div>
                       <p className="text-primary-foreground/80 text-[11px]">
-                        Get $400 off when you move in by Feb 1st!
+                        AI assistant - I can answer questions and schedule tours
                       </p>
                     </div>
                     <CardContent className="p-3">
