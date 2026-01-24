@@ -62,7 +62,7 @@ INSERT INTO knowledge_base (category, title, content) VALUES
 ('policies', 'Tour Information', 'Tours are available by appointment. You''ll meet with Steve, our property manager, who can show you available units and answer any questions.')
 ON CONFLICT DO NOTHING;
 
--- Chat sessions table (for analytics)
+-- Chat sessions table (for analytics and session persistence)
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   session_id TEXT UNIQUE NOT NULL,
@@ -76,7 +76,10 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   collected_name BOOLEAN DEFAULT FALSE,
   collected_phone BOOLEAN DEFAULT FALSE,
   collected_email BOOLEAN DEFAULT FALSE,
-  collected_tour_date BOOLEAN DEFAULT FALSE
+  collected_tour_date BOOLEAN DEFAULT FALSE,
+  collected_info JSONB DEFAULT '{}',
+  messages JSONB DEFAULT '[]',
+  lead_sent_to_leasingvoice BOOLEAN DEFAULT FALSE
 );
 
 -- Create indexes for analytics queries

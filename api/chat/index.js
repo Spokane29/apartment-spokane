@@ -4,8 +4,47 @@ import { createClient } from '@supabase/supabase-js';
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-// In-memory session store (for serverless, consider using Redis or database)
-const sessions = new Map();
+// Database-backed session storage for serverless
+async function getSession(sessionId) {
+  if (!sessionId) return null;
+  const { data } = await supabase
+    .from('chat_sessions')
+    .select('*')
+    .eq('session_id', sessionId)
+    .single();
+  return data;
+}
+
+async function saveSession(session) {
+  const { data: existing } = await supabase
+    .from('chat_sessions')
+    .select('id')
+    .eq('session_id', session.session_id)
+    .single();
+
+  const payload = {
+    session_id: session.session_id,
+    message_count: session.message_count || 0,
+    user_message_count: session.user_message_count || 0,
+    lead_captured: session.lead_captured || false,
+    lead_id: session.lead_id || null,
+    tour_booked: session.tour_booked || false,
+    collected_name: session.collected_name || false,
+    collected_phone: session.collected_phone || false,
+    collected_email: session.collected_email || false,
+    collected_tour_date: session.collected_tour_date || false,
+    collected_info: session.collected_info || {},
+    messages: session.messages || [],
+    lead_sent_to_leasingvoice: session.lead_sent_to_leasingvoice || false,
+    updated_at: new Date().toISOString()
+  };
+
+  if (existing) {
+    await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id);
+  } else {
+    await supabase.from('chat_sessions').insert([payload]);
+  }
+}
 
 // Send lead to LeasingVoice API
 async function sendToLeadsAPI(leadData) {
@@ -151,31 +190,6 @@ function extractLeadInfo(messages) {
   return Object.keys(leadInfo).length > 0 ? leadInfo : null;
 }
 
-// Log/update chat session for analytics
-async function logChatSession(sessionId, data) {
-  try {
-    const { data: existing } = await supabase
-      .from('chat_sessions')
-      .select('id')
-      .eq('session_id', sessionId)
-      .single();
-
-    if (existing) {
-      await supabase.from('chat_sessions').update({
-        ...data,
-        updated_at: new Date().toISOString()
-      }).eq('session_id', sessionId);
-    } else {
-      await supabase.from('chat_sessions').insert([{
-        session_id: sessionId,
-        ...data
-      }]);
-    }
-  } catch (err) {
-    console.log('Analytics log error (table may not exist):', err.message);
-  }
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -185,29 +199,36 @@ export default async function handler(req, res) {
     const { message, sessionId } = req.body;
     if (!message) return res.status(400).json({ error: 'Message required' });
 
-    // Get or create session
-    const isNewSession = !sessions.has(sessionId);
-    let session = sessions.get(sessionId) || {
-      id: sessionId || crypto.randomUUID(),
-      messages: [],
-      leadId: null,
-      collectedInfo: {},
-      leadSentToLeasingVoice: false,
-      messageCount: 0,
-      userMessageCount: 0
+    // Get or create session from database
+    const currentSessionId = sessionId || crypto.randomUUID();
+    let dbSession = await getSession(currentSessionId);
+
+    let session = {
+      session_id: currentSessionId,
+      messages: dbSession?.messages || [],
+      lead_id: dbSession?.lead_id || null,
+      collected_info: dbSession?.collected_info || {},
+      lead_sent_to_leasingvoice: dbSession?.lead_sent_to_leasingvoice || false,
+      message_count: dbSession?.message_count || 0,
+      user_message_count: dbSession?.user_message_count || 0,
+      lead_captured: dbSession?.lead_captured || false,
+      tour_booked: dbSession?.tour_booked || false,
+      collected_name: dbSession?.collected_name || false,
+      collected_phone: dbSession?.collected_phone || false,
+      collected_email: dbSession?.collected_email || false,
+      collected_tour_date: dbSession?.collected_tour_date || false
     };
-    if (!sessions.has(session.id)) sessions.set(session.id, session);
 
     // Track message counts
-    session.messageCount = (session.messageCount || 0) + 1;
-    session.userMessageCount = (session.userMessageCount || 0) + 1;
+    session.message_count = (session.message_count || 0) + 1;
+    session.user_message_count = (session.user_message_count || 0) + 1;
 
     session.messages.push({ role: 'user', content: message });
 
     // Extract lead info from this message
     const newLeadInfo = extractLeadInfo([{ role: 'user', content: message }]);
     if (newLeadInfo) {
-      session.collectedInfo = { ...session.collectedInfo, ...newLeadInfo };
+      session.collected_info = { ...session.collected_info, ...newLeadInfo };
     }
 
     // Get AI config for confirmation template
@@ -225,11 +246,11 @@ export default async function handler(req, res) {
     session.messages.push({ role: 'assistant', content: assistantMessage });
 
     // Check if we have minimum required info (firstName + phone)
-    const info = session.collectedInfo;
+    const info = session.collected_info;
     const hasMinimumInfo = info.first_name && info.phone;
 
-    // Save to Supabase
-    if (hasMinimumInfo && !session.leadId) {
+    // Save lead to Supabase
+    if (hasMinimumInfo && !session.lead_id) {
       const { data: lead } = await supabase.from('leads').insert([{
         first_name: info.first_name,
         last_name: info.last_name || '',
@@ -240,8 +261,8 @@ export default async function handler(req, res) {
         source: 'website-chat',
         property_interest: 'South Oak Apartment',
       }]).select().single();
-      if (lead) session.leadId = lead.id;
-    } else if (session.leadId) {
+      if (lead) session.lead_id = lead.id;
+    } else if (session.lead_id) {
       await supabase.from('leads').update({
         first_name: info.first_name,
         last_name: info.last_name || '',
@@ -249,11 +270,11 @@ export default async function handler(req, res) {
         email: info.email || '',
         move_in_date: info.tour_date || '',
         chat_transcript: session.messages
-      }).eq('id', session.leadId);
+      }).eq('id', session.lead_id);
     }
 
     // Also send to LeasingVoice API (only once per session)
-    if (hasMinimumInfo && !session.leadSentToLeasingVoice) {
+    if (hasMinimumInfo && !session.lead_sent_to_leasingvoice) {
       console.log('Sending lead to LeasingVoice:', info);
       const result = await sendToLeadsAPI({
         first_name: info.first_name,
@@ -264,31 +285,29 @@ export default async function handler(req, res) {
         tour_time: info.tour_time || ''
       });
       if (result?.success) {
-        session.leadSentToLeasingVoice = true;
+        session.lead_sent_to_leasingvoice = true;
         // Update local lead with LeasingVoice ID if returned
-        if (result.data?.leadId && session.leadId) {
+        if (result.data?.leadId && session.lead_id) {
           await supabase.from('leads').update({
             leasingvoice_id: result.data.leadId
-          }).eq('id', session.leadId);
+          }).eq('id', session.lead_id);
         }
       }
     }
 
-    // Log session analytics
-    const hasTourDate = !!(info.tour_date);
-    await logChatSession(session.id, {
-      message_count: session.messageCount + 1, // +1 for assistant response
-      user_message_count: session.userMessageCount,
-      lead_captured: hasMinimumInfo,
-      lead_id: session.leadId,
-      tour_booked: hasTourDate && hasMinimumInfo,
-      collected_name: !!info.first_name,
-      collected_phone: !!info.phone,
-      collected_email: !!info.email,
-      collected_tour_date: hasTourDate
-    });
+    // Update session tracking flags
+    session.lead_captured = hasMinimumInfo;
+    session.tour_booked = !!(info.tour_date) && hasMinimumInfo;
+    session.collected_name = !!info.first_name;
+    session.collected_phone = !!info.phone;
+    session.collected_email = !!info.email;
+    session.collected_tour_date = !!info.tour_date;
+    session.message_count = session.message_count + 1; // +1 for assistant response
 
-    res.json({ message: assistantMessage, sessionId: session.id });
+    // Save session to database
+    await saveSession(session);
+
+    res.json({ message: assistantMessage, sessionId: session.session_id });
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ error: 'Failed to process message' });
