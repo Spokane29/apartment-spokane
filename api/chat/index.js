@@ -170,6 +170,10 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}) {
   const confirmationTemplate = templateEntry?.content ||
     "Thanks {name}! Here's what I have: Phone: {phone}, Email: {email}, Tour: {tour_date} at {tour_time}. You'll receive a confirmation shortly. See you then!";
 
+  // Get custom AI rules from database
+  const rulesEntry = (knowledgeBase || []).find(e => e.category === 'rules');
+  const customRules = rulesEntry?.content || '';
+
   // Combine all knowledge base entries (excluding template) into one document
   const knowledgeContent = (knowledgeBase || [])
     .filter(e => e.category !== 'template')
@@ -206,7 +210,7 @@ ADDITIONAL RULES:
 - Stay fair housing compliant
 - Don't use markdown formatting
 - NEVER ask for info already collected above
-- When suggesting a tour, keep it SIMPLE: "Want to schedule a tour?" or "When would you like to come see it?" - do NOT add specific reasons like "to see the storage" or "to check out the parking"`;
+${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
   }
 
   // Fallback
@@ -230,7 +234,7 @@ ${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour 
 ${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
 
 Keep responses SHORT. NEVER ask for info already collected.
-When suggesting a tour, just say "Want to schedule a tour?" - don't add reasons like "to see the X".`;
+${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
 }
 
 function extractLeadInfo(messages) {

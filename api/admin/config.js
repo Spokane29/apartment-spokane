@@ -17,13 +17,21 @@ export default async function handler(req, res) {
       .eq('category', 'template')
       .single();
 
+    // Get AI rules from knowledge_base
+    const { data: rules } = await supabase
+      .from('knowledge_base')
+      .select('content')
+      .eq('category', 'rules')
+      .single();
+
     res.json({
       ...config,
-      confirmation_template: template?.content || DEFAULT_CONFIRMATION
+      confirmation_template: template?.content || DEFAULT_CONFIRMATION,
+      ai_rules: rules?.content || ''
     });
 
   } else if (req.method === 'PUT') {
-    const { assistant_name, personality_rules, greeting_message, confirmation_template } = req.body;
+    const { assistant_name, personality_rules, greeting_message, confirmation_template, ai_rules } = req.body;
 
     // Update ai_config
     const updates = {};
@@ -66,6 +74,28 @@ export default async function handler(req, res) {
       templateContent = confirmation_template;
     }
 
+    // Update AI rules if provided
+    let rulesContent = null;
+    if (ai_rules !== undefined) {
+      const { data: existing } = await supabase
+        .from('knowledge_base')
+        .select('id')
+        .eq('category', 'rules')
+        .single();
+
+      if (existing) {
+        await supabase
+          .from('knowledge_base')
+          .update({ content: ai_rules, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('knowledge_base')
+          .insert([{ category: 'rules', title: 'AI Behavior Rules', content: ai_rules }]);
+      }
+      rulesContent = ai_rules;
+    }
+
     // Return updated config
     if (!configData) {
       const { data } = await supabase.from('ai_config').select('*').single();
@@ -74,7 +104,8 @@ export default async function handler(req, res) {
 
     res.json({
       ...configData,
-      confirmation_template: templateContent || DEFAULT_CONFIRMATION
+      confirmation_template: templateContent || DEFAULT_CONFIRMATION,
+      ai_rules: rulesContent || ''
     });
 
   } else {

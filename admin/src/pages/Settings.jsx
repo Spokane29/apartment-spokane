@@ -6,6 +6,7 @@ export default function Settings() {
     greeting_message: '',
     personality_rules: '',
     confirmation_template: '',
+    ai_rules: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -25,6 +26,7 @@ export default function Settings() {
           greeting_message: data.greeting_message || '',
           personality_rules: data.personality_rules || '',
           confirmation_template: data.confirmation_template || "Got it, {name}! You're scheduled for {tour_date} at {tour_time}. Steve will reach out at {phone} to confirm. See you soon!",
+          ai_rules: data.ai_rules || '',
         });
       }
     } catch (err) {
@@ -112,6 +114,19 @@ export default function Settings() {
           />
           <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
             Message sent after collecting tour info. Use placeholders: {'{name}'}, {'{phone}'}, {'{email}'}, {'{tour_date}'}, {'{tour_time}'}
+          </small>
+        </div>
+
+        <div className="form-group">
+          <label>AI Behavior Rules</label>
+          <textarea
+            value={config.ai_rules}
+            onChange={(e) => setConfig({ ...config, ai_rules: e.target.value })}
+            placeholder="Keep responses to 2-3 sentences max&#10;When suggesting a tour, keep it simple - just say 'Want to schedule a tour?'&#10;Don't use markdown formatting"
+            style={{ minHeight: '150px' }}
+          />
+          <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
+            Specific rules for AI behavior. One rule per line. These override default behaviors.
           </small>
         </div>
 
