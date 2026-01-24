@@ -169,58 +169,18 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
-        // Try Web Audio API first (more reliable on mobile)
-        const ctx = audioContextRef.current
-        if (ctx) {
-          try {
-            // Resume context if suspended
-            if (ctx.state === 'suspended') {
-              await ctx.resume()
-            }
-
-            // Decode base64 to array buffer
-            const binaryString = atob(data.audio)
-            const bytes = new Uint8Array(binaryString.length)
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i)
-            }
-
-            const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0))
-            const source = ctx.createBufferSource()
-            source.buffer = audioBuffer
-            source.connect(ctx.destination)
-
-            source.onended = async () => {
-              console.log('Audio ended via Web Audio')
-              setIsSpeaking(false)
-
-              // Suspend AudioContext to release audio resources before using mic
-              try {
-                await ctx.suspend()
-                console.log('AudioContext suspended')
-              } catch (e) {
-                console.log('Could not suspend AudioContext:', e)
-              }
-
-              autoStartListening()
-            }
-
-            source.start()
-            console.log('Playing via Web Audio API')
-            return
-          } catch (e) {
-            console.log('Web Audio failed, trying HTML5:', e)
-          }
-        }
-
-        // Fallback to HTML5 Audio
+        // Use HTML5 Audio ONLY - Web Audio API conflicts with mic on mobile
+        // This is simpler and more reliable for hands-free mode
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
 
         audio.onended = () => {
-          console.log('Audio ended, starting auto-listen')
+          console.log('Audio ended via HTML5, starting auto-listen')
           setIsSpeaking(false)
-          autoStartListening()
+          // Small delay to ensure audio is fully released
+          setTimeout(() => {
+            autoStartListening()
+          }, 200)
         }
 
         audio.onerror = () => {
