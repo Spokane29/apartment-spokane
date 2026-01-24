@@ -546,6 +546,7 @@ const [sessionId, setSessionId] = useState<string | null>(null)
 const [isListening, setIsListening] = useState(false)    // Mic recording
 const [voiceEnabled, setVoiceEnabled] = useState(true)   // TTS toggle
 const [isSpeaking, setIsSpeaking] = useState(false)      // Audio playing
+const voiceEnabledRef = useRef(true)  // Ref for callbacks (avoids stale closure)
 ```
 
 **Key Functions:**
@@ -726,11 +727,24 @@ const playAudio = async (base64Audio) => {
 
 ### Auto-Listen Mode
 
-After AI speaks, automatically activate microphone for 5 seconds:
+After AI speaks, automatically activate microphone for 5 seconds.
+
+**Important:** Use a ref to track `voiceEnabled` state to avoid stale closures in callbacks:
 
 ```typescript
+// State and ref - ref avoids stale closure in audio callbacks
+const [voiceEnabled, setVoiceEnabled] = useState(true)
+const voiceEnabledRef = useRef(true)
+
+// Keep ref in sync with state
+useEffect(() => {
+  voiceEnabledRef.current = voiceEnabled
+}, [voiceEnabled])
+
 const autoStartListening = () => {
-  if (!voiceEnabled || !SpeechRecognition) return
+  // Use ref to get current value (avoid stale closure)
+  const isVoiceEnabled = voiceEnabledRef.current
+  if (!isVoiceEnabled || !SpeechRecognition) return
 
   // Small delay for recognition to reset
   setTimeout(() => {
@@ -745,6 +759,8 @@ const autoStartListening = () => {
   }, 300)
 }
 ```
+
+**Why the ref is needed:** When `audio.onended` fires, it captures the `voiceEnabled` value from when the callback was created. If the user toggled voice off/on during playback, the callback would have the wrong value. The ref always returns the current state.
 
 ---
 
@@ -924,6 +940,7 @@ const autoStartListening = () => {
 | "$1,200" read literally | Missing preprocessing | Add to `convertToSpeakable()` |
 | Mobile audio not playing | AudioContext not initialized | Initialize on first user tap |
 | Mic not working on mobile | Permission not granted | Request permission explicitly |
+| Auto-listen stops after first exchange | Stale closure in callback | Use `voiceEnabledRef` instead of state in callbacks |
 
 ### AI Issues
 
@@ -1003,6 +1020,8 @@ const autoStartListening = () => {
 | 1.5 | - | Fixed AI conversation reset bug |
 | 1.6 | - | Improved text-to-speech naturalness |
 | 1.7 | - | Added admin dashboard documentation |
+| 1.8 | - | Added conversation state tracking to prevent AI reset during tour booking |
+| 1.9 | - | Fixed stale closure bug in auto-listen (voiceEnabledRef) |
 
 ---
 
