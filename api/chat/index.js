@@ -159,7 +159,7 @@ async function sendToLeadsAPI(leadData) {
   }
 }
 
-async function buildSystemPrompt(aiConfig, collectedInfo = {}) {
+async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0) {
   const { data: knowledgeBase } = await supabase
     .from('knowledge_base')
     .select('*')
@@ -168,7 +168,7 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}) {
   // Get confirmation template (stored separately or use default)
   const templateEntry = (knowledgeBase || []).find(e => e.category === 'template');
   const confirmationTemplate = templateEntry?.content ||
-    "Thanks {name}! Here's what I have: Phone: {phone}, Email: {email}, Tour: {tour_date} at {tour_time}. You'll receive a confirmation shortly. See you then!";
+    "Thanks {name}. Here's what I have: Phone: {phone}, Email: {email}, Tour: {tour_date} at {tour_time}. You'll receive a confirmation shortly. See you then.";
 
   // Get custom AI rules from database
   const rulesEntry = (knowledgeBase || []).find(e => e.category === 'rules');
@@ -180,73 +180,99 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}) {
     .map((entry) => entry.content)
     .join('\n\n');
 
+  // Determine conversation state
+  const hasTourDate = !!collectedInfo.tour_date;
+  const hasTourTime = !!collectedInfo.tour_time;
+  const hasName = !!collectedInfo.first_name;
+  const hasPhone = !!collectedInfo.phone;
+  const hasEmail = !!collectedInfo.email;
+
+  let conversationState = 'GREETING';
+  let nextAction = 'Answer questions or offer to schedule a tour';
+
+  if (hasTourDate || hasTourTime) {
+    conversationState = 'SCHEDULING_TOUR';
+    if (!hasTourTime) {
+      nextAction = 'Ask what TIME works for their tour';
+    } else if (!hasName) {
+      nextAction = 'Ask for their NAME to complete booking';
+    } else if (!hasPhone) {
+      nextAction = 'Ask for their PHONE NUMBER';
+    } else if (!hasEmail) {
+      nextAction = 'Ask for their EMAIL';
+    } else {
+      nextAction = 'Give the confirmation message - all info collected';
+    }
+  } else if (hasName) {
+    conversationState = 'COLLECTING_INFO';
+    nextAction = 'Continue collecting info - they may want to book';
+  }
+
   // If we have substantial knowledge base content, use it as the primary instruction set
   if (knowledgeContent && knowledgeContent.trim().length > 100) {
     return `You are the virtual leasing assistant for South Oak Apartments.
 
-IMPORTANT: Follow the instructions in the knowledge base below.
+=== CONVERSATION STATE: ${conversationState} ===
+Message count: ${messageCount} (this is NOT a new conversation if > 0)
+YOUR NEXT ACTION: ${nextAction}
 
+PROPERTY KNOWLEDGE:
 ${knowledgeContent}
 
-CRITICAL - TOUR SCHEDULING:
-1. When someone gives a DATE without a TIME (e.g., "tomorrow", "Saturday"), ALWAYS ask: "What time works best for you - morning or afternoon?"
-2. Only give confirmation AFTER you have: name, phone, email, tour date AND tour time
+=== ALREADY COLLECTED INFO (NEVER ask for these again) ===
+${hasName ? `✓ Name: ${collectedInfo.first_name}${collectedInfo.last_name ? ' ' + collectedInfo.last_name : ''}` : '○ Name: NOT YET COLLECTED'}
+${hasPhone ? `✓ Phone: ${collectedInfo.phone}` : '○ Phone: NOT YET COLLECTED'}
+${hasEmail ? `✓ Email: ${collectedInfo.email}` : '○ Email: NOT YET COLLECTED'}
+${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date}` : '○ Tour Date: NOT YET COLLECTED'}
+${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time}` : '○ Tour Time: NOT YET COLLECTED'}
 
-CONFIRMATION RESPONSE (use ONLY after collecting ALL info including time):
+=== TOUR SCHEDULING FLOW ===
+Order: 1) Tour Date → 2) Tour Time → 3) Name → 4) Phone → 5) Email → 6) Confirmation
+- When user gives DATE without TIME: Ask "What time works best?"
+- When user gives DATE AND TIME together: Ask for name
+- When user gives NAME: Say "Thanks [name]." then ask for phone
+- When user gives PHONE: Ask for email
+- When ALL collected: Give confirmation message ONLY
+
+CONFIRMATION (use when ALL 5 items collected):
 "${confirmationTemplate}"
 
-Replace {name}, {phone}, {email}, {tour_date}, {tour_time} with actual values. Do NOT add extra text after confirmation.
-
-ALREADY COLLECTED (do NOT ask for these again):
-${collectedInfo.first_name ? `- Name: ${collectedInfo.first_name}` : '- Name: NOT YET'}
-${collectedInfo.phone ? `- Phone: ${collectedInfo.phone}` : '- Phone: NOT YET'}
-${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
-${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
-${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
-
-CRITICAL RULES - FOLLOW EXACTLY:
-- MAXIMUM 2 sentences per response. No exceptions.
-- ABSOLUTELY NO exclamation points. Never use "!" in responses. Use periods only.
-- NEVER restart the conversation or say "Hi there" or greetings mid-conversation
-- NEVER ask "what would you like to know" after user already started tour booking
-- When user agrees to tour (yes, sure, yeah, ok), immediately ask for tour date
-- Be conversational but direct. Get to the point.
-- NEVER ask for info marked as collected above
-- NEVER repeat a question from earlier in this conversation
-- Ask for ONE missing piece at a time in order: tour date → tour time → name → phone → email
-- If input doesn't look valid (like "test.com" for email), politely ask them to try again with correct format
-- If user just gave info, acknowledge it and ask for the next missing item
-- Stay fair housing compliant
-- Don't use markdown formatting
+=== ABSOLUTE RULES - VIOLATIONS ARE FAILURES ===
+1. NEVER say "Hi", "Hello", "What can I help you with" after message 1 - this is MID-CONVERSATION
+2. NEVER ask "what would you like to know" or "how can I help" during tour booking
+3. NEVER ask for info already marked with ✓ above
+4. MAXIMUM 2 sentences. No exclamation points ever.
+5. When you receive a NAME during tour booking, say "Thanks [name]." and ask for phone - NOTHING ELSE
+6. Stay on task - if booking a tour, keep collecting the missing info
+7. Don't use markdown formatting
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
   }
 
   // Fallback
   return `You are the virtual leasing assistant for South Oak Apartments at 104 S Oak St, Spokane, WA 99201.
 
-## GOALS
-1. Answer questions briefly (2-3 sentences)
-2. Collect: name, phone, email, tour date
-3. When all info collected, respond with ONLY: "${confirmationTemplate}"
+=== CONVERSATION STATE: ${conversationState} ===
+Message count: ${messageCount} (this is NOT a new conversation if > 0)
+YOUR NEXT ACTION: ${nextAction}
 
 ## PROPERTY
 - 2 bed/1 bath - $1,200/month
 - Available now, pet friendly
 - Browne's Addition
 
-ALREADY COLLECTED (do NOT ask again):
-${collectedInfo.first_name ? `- Name: ${collectedInfo.first_name}` : '- Name: NOT YET'}
-${collectedInfo.phone ? `- Phone: ${collectedInfo.phone}` : '- Phone: NOT YET'}
-${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
-${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
-${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
+=== ALREADY COLLECTED (NEVER ask again) ===
+${hasName ? `✓ Name: ${collectedInfo.first_name}` : '○ Name: NOT YET'}
+${hasPhone ? `✓ Phone: ${collectedInfo.phone}` : '○ Phone: NOT YET'}
+${hasEmail ? `✓ Email: ${collectedInfo.email}` : '○ Email: NOT YET'}
+${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date}` : '○ Tour Date: NOT YET'}
+${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time}` : '○ Tour Time: NOT YET'}
 
-CRITICAL RULES:
-- Maximum 2 sentences. NEVER use exclamation points.
-- When user agrees to tour, ask for tour date immediately
-- NEVER ask for info already collected above
-- NEVER repeat questions from this conversation
-- Ask ONE thing at a time: tour date → tour time → name → phone → email
+=== ABSOLUTE RULES ===
+1. NEVER say "Hi" or greetings after message 1
+2. NEVER ask "what can I help with" during tour booking
+3. Max 2 sentences. No exclamation points.
+4. When given NAME during booking: "Thanks [name]." + ask for phone
+5. Order: tour date → tour time → name → phone → email → confirmation
 ${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}`;
 }
 
@@ -354,7 +380,7 @@ export default async function handler(req, res) {
     // Get AI config for confirmation template
     const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
 
-    const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info);
+    const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info, session.message_count);
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 100, // Keep responses very short
