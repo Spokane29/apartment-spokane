@@ -25,6 +25,7 @@ export default function EmbeddedChat() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const voiceEnabledRef = useRef(true) // Ref to avoid stale closure in callbacks
+  const micStreamRef = useRef<MediaStream | null>(null) // Track mic stream to release it
 
   // Create/recreate speech recognition instance
   const createRecognition = () => {
@@ -121,6 +122,13 @@ export default function EmbeddedChat() {
         // Ignore
       }
       recognitionRef.current = null
+    }
+
+    // Release mic stream to free up hardware
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop())
+      micStreamRef.current = null
+      console.log('Released mic stream after voice input')
     }
 
     sendMessage(text)
@@ -372,11 +380,22 @@ export default function EmbeddedChat() {
       recognitionRef.current = null
     }
 
+    // Release previous mic stream completely before requesting new one
+    if (micStreamRef.current) {
+      console.log('Releasing previous mic stream...')
+      micStreamRef.current.getTracks().forEach(track => {
+        track.stop()
+        console.log('Stopped track:', track.kind)
+      })
+      micStreamRef.current = null
+    }
+
     // Re-request mic permission to ensure we still have access (mobile can revoke)
     try {
       console.log('Re-requesting mic permission...')
-      await navigator.mediaDevices.getUserMedia({ audio: true })
-      console.log('Mic permission confirmed')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      micStreamRef.current = stream // Store so we can release it next time
+      console.log('Mic permission confirmed, stream active')
     } catch (err) {
       console.error('Mic permission lost:', err)
       return
