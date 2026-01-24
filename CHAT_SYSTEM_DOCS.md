@@ -28,6 +28,7 @@ A complete AI chat system with:
 - **AI Chat**: Claude-powered conversational AI with custom knowledge base
 - **Voice Input**: Browser speech recognition (Web Speech API)
 - **Voice Output**: ElevenLabs text-to-speech for AI responses
+- **Hands-Free Mode**: Auto-listen after AI speaks (works on both mobile and desktop)
 - **Lead Capture**: Automatic extraction of name, phone, email, tour date/time
 - **Session Persistence**: Database-backed conversation history
 - **Admin Dashboard**: Configure AI behavior, manage knowledge base, view leads and analytics
@@ -725,9 +726,15 @@ const playAudio = async (base64Audio) => {
 }
 ```
 
-### Auto-Listen Mode
+### Auto-Listen Mode (Hands-Free)
 
-After AI speaks, automatically activate microphone for 5 seconds.
+After AI speaks, automatically activate microphone for 5 seconds. This enables true hands-free operation on both **mobile and desktop** browsers - users can have a full conversation without touching any buttons.
+
+**Supported platforms:**
+- Chrome Desktop: Full support
+- Chrome Mobile (Android): Full support
+- Safari Mobile (iOS): Full support with workarounds
+- Edge: Full support
 
 **Important considerations for mobile:**
 1. Use a ref to track `voiceEnabled` state to avoid stale closures in callbacks
@@ -1132,6 +1139,7 @@ if (micStreamRef.current) {
 | 1.12 | - | Critical fix: suspend AudioContext after playback, re-request mic permission |
 | 1.13 | - | Release mic stream tracks between interactions (fixes 4-5 exchange limit) |
 | 1.14 | - | Switch to HTML5 Audio only - Web Audio API conflicts with mic on mobile |
+| 1.15 | - | Confirmed hands-free mode working on both mobile and desktop browsers |
 
 ---
 
