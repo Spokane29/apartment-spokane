@@ -124,6 +124,8 @@ export default function EmbeddedChat() {
 
         audio.onended = () => {
           setIsSpeaking(false)
+          // Auto-start listening after AI finishes speaking
+          autoStartListening()
         }
 
         audio.onerror = () => {
@@ -226,6 +228,27 @@ export default function EmbeddedChat() {
       recognitionRef.current.stop()
     }
     setIsListening(false)
+  }
+
+  // Auto-start listening after AI speaks (with 5 second timeout)
+  const autoStartListening = () => {
+    if (!SpeechRecognition || !recognitionRef.current || !voiceEnabled) return
+
+    setIsListening(true)
+
+    try {
+      recognitionRef.current.start()
+
+      // Auto-stop after 5 seconds if no speech detected
+      setTimeout(() => {
+        if (recognitionRef.current) {
+          recognitionRef.current.stop()
+        }
+      }, 5000)
+    } catch (err) {
+      console.error('Failed to auto-start listening:', err)
+      setIsListening(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
