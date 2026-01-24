@@ -388,12 +388,16 @@ export default async function handler(req, res) {
     session.collected_tour_date = !!info.tour_date;
     session.message_count = session.message_count + 1; // +1 for assistant response
 
-    // Save session to database
-    await saveSession(session);
+    // Save session to database (don't fail request if this errors)
+    try {
+      await saveSession(session);
+    } catch (saveErr) {
+      console.error('Session save error (non-fatal):', saveErr.message);
+    }
 
     res.json({ message: assistantMessage, sessionId: session.session_id });
   } catch (error) {
-    console.error('Chat error:', error);
-    res.status(500).json({ error: 'Failed to process message' });
+    console.error('Chat error:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to process message', details: error.message });
   }
 }
