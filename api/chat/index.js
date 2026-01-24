@@ -46,6 +46,69 @@ async function saveSession(session) {
   }
 }
 
+// Convert relative date to YYYY-MM-DD format
+function formatDate(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date();
+  const lower = dateStr.toLowerCase();
+
+  if (lower === 'today') {
+    return today.toISOString().split('T')[0];
+  }
+  if (lower === 'tomorrow') {
+    today.setDate(today.getDate() + 1);
+    return today.toISOString().split('T')[0];
+  }
+
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const dayIndex = days.indexOf(lower);
+  if (dayIndex !== -1) {
+    const currentDay = today.getDay();
+    let daysUntil = dayIndex - currentDay;
+    if (daysUntil <= 0) daysUntil += 7;
+    today.setDate(today.getDate() + daysUntil);
+    return today.toISOString().split('T')[0];
+  }
+
+  // If it's already a date format like 1/25, convert to full date
+  const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})/);
+  if (slashMatch) {
+    const month = slashMatch[1].padStart(2, '0');
+    const day = slashMatch[2].padStart(2, '0');
+    return `${today.getFullYear()}-${month}-${day}`;
+  }
+
+  return dateStr;
+}
+
+// Convert time to readable format like "2:00 PM"
+function formatTime(timeStr) {
+  if (!timeStr) return null;
+  const lower = timeStr.toLowerCase();
+
+  if (lower === 'morning') return 'Morning';
+  if (lower === 'afternoon') return 'Afternoon';
+  if (lower === 'noon') return '12:00 PM';
+  if (lower === 'evening') return 'Evening';
+
+  // Parse times like "2pm", "2:30pm", "14:00"
+  const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (match) {
+    let hour = parseInt(match[1]);
+    const minutes = match[2] || '00';
+    const meridiem = match[3]?.toLowerCase();
+
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+
+    const h = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+    const m = meridiem || (hour >= 12 ? 'PM' : 'AM');
+    return `${h}:${minutes} ${m.toUpperCase()}`;
+  }
+
+  return timeStr;
+}
+
 // Send lead to LeasingVoice API
 async function sendToLeadsAPI(leadData) {
   const apiUrl = 'https://www.leasingvoice.com/api/leads/external';
@@ -63,10 +126,10 @@ async function sendToLeadsAPI(leadData) {
 
   // Add tour date/time as preferred fields for automatic tour creation
   if (leadData.tour_date) {
-    payload.preferredDate = leadData.tour_date;
+    payload.preferredDate = formatDate(leadData.tour_date);
   }
   if (leadData.tour_time) {
-    payload.preferredTime = leadData.tour_time;
+    payload.preferredTime = formatTime(leadData.tour_time);
   }
 
   try {
