@@ -34,6 +34,16 @@ export default function Leads() {
     }
   }
 
+  async function deleteLead(id) {
+    if (!window.confirm('Are you sure you want to delete this lead?')) return;
+    try {
+      await fetch(`/api/leads?id=${id}`, { method: 'DELETE' });
+      fetchLeads();
+    } catch (err) {
+      console.error('Failed to delete lead:', err);
+    }
+  }
+
   if (loading) {
     return <div className="loading">Loading...</div>;
   }
@@ -91,13 +101,22 @@ export default function Leads() {
                     </select>
                   </td>
                   <td>
-                    <button
-                      className="btn btn--secondary"
-                      onClick={() => setSelectedLead(lead)}
-                      style={{ padding: '6px 12px', fontSize: '12px' }}
-                    >
-                      View
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        className="btn btn--secondary"
+                        onClick={() => setSelectedLead(lead)}
+                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                      >
+                        View
+                      </button>
+                      <button
+                        className="btn"
+                        onClick={() => deleteLead(lead.id)}
+                        style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none' }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -167,9 +186,16 @@ export default function Leads() {
               </div>
             )}
 
-            <div style={{ marginTop: '20px' }}>
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
               <button className="btn btn--secondary" onClick={() => setSelectedLead(null)}>
                 Close
+              </button>
+              <button
+                className="btn"
+                onClick={() => { deleteLead(selectedLead.id); setSelectedLead(null); }}
+                style={{ background: '#ef4444', color: 'white', border: 'none' }}
+              >
+                Delete Lead
               </button>
             </div>
           </div>

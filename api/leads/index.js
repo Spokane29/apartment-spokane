@@ -5,7 +5,16 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+      const { days } = req.query;
+      let query = supabase.from('leads').select('*').order('created_at', { ascending: false });
+
+      if (days) {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - parseInt(days));
+        query = query.gte('created_at', startDate.toISOString());
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       res.json(data);
     } catch (error) {
@@ -24,6 +33,17 @@ export default async function handler(req, res) {
 
       if (error) throw error;
       res.status(201).json(data);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  } else if (req.method === 'DELETE') {
+    try {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: 'Lead ID required' });
+
+      const { error } = await supabase.from('leads').delete().eq('id', id);
+      if (error) throw error;
+      res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
