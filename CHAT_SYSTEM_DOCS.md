@@ -831,17 +831,32 @@ source.onended = async () => {
 }
 ```
 
-2. **Re-request mic permission before each auto-listen** - Mobile can silently lose mic access:
+2. **Release mic stream tracks and re-request** - Mobile has limited mic resources:
 ```typescript
+const micStreamRef = useRef<MediaStream | null>(null)
+
 const autoStartListening = async () => {
-  // Re-request to ensure we still have access
+  // CRITICAL: Release previous stream completely
+  if (micStreamRef.current) {
+    micStreamRef.current.getTracks().forEach(track => track.stop())
+    micStreamRef.current = null
+  }
+
+  // Re-request fresh mic access
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true })
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    micStreamRef.current = stream // Store for cleanup next time
   } catch (err) {
     console.error('Mic permission lost')
     return
   }
   // ... then create recognition and start
+}
+
+// Also release in handleVoiceInput after getting speech:
+if (micStreamRef.current) {
+  micStreamRef.current.getTracks().forEach(track => track.stop())
+  micStreamRef.current = null
 }
 ```
 
@@ -1028,6 +1043,7 @@ const autoStartListening = async () => {
 | Auto-listen stops after first exchange | Stale closure in callback | Use `voiceEnabledRef` instead of state in callbacks |
 | Auto-listen dies after 2-3 exchanges | Recognition object in bad state | Recreate recognition instance each time with `createRecognition()` |
 | Auto-listen dies after 3+ exchanges | AudioContext holding mic resources | Suspend AudioContext after audio ends, re-request getUserMedia |
+| Auto-listen dies after 4-5 exchanges | Mic stream not fully released | Stop all tracks on micStreamRef before requesting new stream |
 
 ### AI Issues
 
@@ -1112,6 +1128,7 @@ const autoStartListening = async () => {
 | 1.10 | - | Fixed mobile recognition dying after 2 exchanges (recreate instance each time) |
 | 1.11 | - | More aggressive mobile fix: longer delays, abort+null cleanup, 2 retries |
 | 1.12 | - | Critical fix: suspend AudioContext after playback, re-request mic permission |
+| 1.13 | - | Release mic stream tracks between interactions (fixes 4-5 exchange limit) |
 
 ---
 
