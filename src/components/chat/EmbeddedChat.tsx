@@ -26,38 +26,54 @@ export default function EmbeddedChat() {
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const voiceEnabledRef = useRef(true) // Ref to avoid stale closure in callbacks
 
+  // Create/recreate speech recognition instance
+  const createRecognition = () => {
+    if (!SpeechRecognition) return null
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      console.log('Speech result:', transcript)
+      if (transcript.trim()) {
+        handleVoiceInput(transcript.trim())
+      }
+    }
+
+    recognition.onerror = (event: any) => {
+      // Ignore 'aborted' and 'no-speech' errors - they're expected
+      if (event.error === 'aborted' || event.error === 'no-speech') {
+        console.log('Recognition ended:', event.error)
+      } else {
+        console.error('Speech recognition error:', event.error)
+      }
+      setIsListening(false)
+    }
+
+    recognition.onend = () => {
+      console.log('Recognition onend fired')
+      setIsListening(false)
+    }
+
+    return recognition
+  }
+
   useEffect(() => {
     initChat()
 
     // Initialize speech recognition
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition()
-      recognition.continuous = false
-      recognition.interimResults = false
-      recognition.lang = 'en-US'
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript
-        if (transcript.trim()) {
-          handleVoiceInput(transcript.trim())
-        }
-      }
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error)
-        setIsListening(false)
-      }
-
-      recognition.onend = () => {
-        setIsListening(false)
-      }
-
-      recognitionRef.current = recognition
-    }
+    recognitionRef.current = createRecognition()
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.abort()
+        try {
+          recognitionRef.current.abort()
+        } catch (e) {
+          // Ignore
+        }
       }
     }
   }, [])
@@ -255,6 +271,12 @@ export default function EmbeddedChat() {
       return
     }
 
+    // Create fresh recognition instance if needed
+    if (!recognitionRef.current) {
+      console.log('Creating recognition for manual start')
+      recognitionRef.current = createRecognition()
+    }
+
     if (!recognitionRef.current) {
       alert('Speech recognition failed to initialize')
       return
@@ -269,14 +291,24 @@ export default function EmbeddedChat() {
     }
 
     stopSpeaking()
-    setIsListening(true)
 
     try {
       recognitionRef.current.start()
+      setIsListening(true)
     } catch (err: any) {
       console.error('Failed to start listening:', err)
-      alert('Failed to start speech recognition: ' + err.message)
-      setIsListening(false)
+      // Try with fresh instance
+      console.log('Retrying with fresh recognition...')
+      recognitionRef.current = createRecognition()
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start()
+          setIsListening(true)
+        } catch (retryErr: any) {
+          alert('Failed to start speech recognition: ' + retryErr.message)
+          setIsListening(false)
+        }
+      }
     }
   }
 
@@ -296,17 +328,13 @@ export default function EmbeddedChat() {
   }
 
   // Auto-start listening after AI speaks (with 5 second timeout)
-  const autoStartListening = () => {
+  const autoStartListening = (retryCount = 0) => {
     // Use ref to get current value (avoid stale closure)
     const isVoiceEnabled = voiceEnabledRef.current
-    console.log('autoStartListening called, voiceEnabled:', isVoiceEnabled)
+    console.log('autoStartListening called, voiceEnabled:', isVoiceEnabled, 'retry:', retryCount)
 
     if (!SpeechRecognition) {
       console.log('No SpeechRecognition support')
-      return
-    }
-    if (!recognitionRef.current) {
-      console.log('No recognition ref')
       return
     }
     if (!isVoiceEnabled) {
@@ -322,11 +350,21 @@ export default function EmbeddedChat() {
 
     // Small delay to let the previous recognition fully stop
     setTimeout(() => {
-      setIsListening(true)
+      // Recreate recognition object to avoid stale state on mobile
+      if (!recognitionRef.current || retryCount > 0) {
+        console.log('Creating fresh recognition instance')
+        recognitionRef.current = createRecognition()
+      }
+
+      if (!recognitionRef.current) {
+        console.log('Failed to create recognition')
+        return
+      }
 
       try {
         recognitionRef.current.start()
-        console.log('Auto-listening started')
+        setIsListening(true)
+        console.log('Auto-listening started successfully')
 
         // Auto-stop after 5 seconds if no speech detected
         listenTimeoutRef.current = setTimeout(() => {
@@ -343,8 +381,14 @@ export default function EmbeddedChat() {
       } catch (err: any) {
         console.error('Failed to auto-start listening:', err.message)
         setIsListening(false)
+
+        // Retry once with a fresh recognition instance
+        if (retryCount < 1) {
+          console.log('Retrying with fresh recognition...')
+          setTimeout(() => autoStartListening(retryCount + 1), 500)
+        }
       }
-    }, 300)
+    }, retryCount === 0 ? 300 : 100)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
