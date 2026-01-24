@@ -1143,6 +1143,9 @@ if (micStreamRef.current) {
 | 1.16 | - | Fixed: Don't overwrite already-collected info (name from email address bug) |
 | 1.17 | - | Fixed: Don't extract name from messages containing @ (email context) |
 | 1.18 | - | Fixed: Added "LAST USER MESSAGE" to prompt to prevent AI repetition |
+| 1.19 | - | Stronger anti-reset rules (NEVER say "Hi there" at top of prompt) |
+| 1.20 | - | Voice preprocessing for spoken emails ("joe at gmail dot com") |
+| 1.21 | - | iOS audio fixes: playsinline attributes, load() before play(), unlockAudio() |
 
 ---
 
