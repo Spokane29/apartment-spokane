@@ -170,18 +170,26 @@ export default function EmbeddedChat() {
   }
 
   const startListening = () => {
+    console.log('startListening called')
+
     if (!SpeechRecognition) {
+      console.log('SpeechRecognition not supported')
       alert('Speech recognition is not supported in your browser')
       return
     }
 
-    if (!recognitionRef.current) return
+    if (!recognitionRef.current) {
+      console.log('recognitionRef is null')
+      return
+    }
 
     stopSpeaking()
     setIsListening(true)
+    console.log('Starting recognition...')
 
     try {
       recognitionRef.current.start()
+      console.log('Recognition started')
     } catch (err) {
       console.error('Failed to start listening:', err)
       setIsListening(false)
@@ -244,7 +252,10 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={isListening ? stopListening : startListening}
+          onClick={() => {
+            console.log('Mic button clicked, isListening:', isListening)
+            isListening ? stopListening() : startListening()
+          }}
           disabled={isLoading}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
