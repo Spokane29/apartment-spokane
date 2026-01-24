@@ -23,6 +23,7 @@ export default function EmbeddedChat() {
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUnlocked = useRef(false)
+  const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     initChat()
@@ -82,7 +83,19 @@ export default function EmbeddedChat() {
   }
 
   const handleVoiceInput = (text: string) => {
+    // Clear the auto-stop timeout since we got input
+    if (listenTimeoutRef.current) {
+      clearTimeout(listenTimeoutRef.current)
+      listenTimeoutRef.current = null
+    }
     setIsListening(false)
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch (e) {
+        // Ignore - already stopped
+      }
+    }
     sendMessage(text)
   }
 
@@ -224,8 +237,16 @@ export default function EmbeddedChat() {
   }
 
   const stopListening = () => {
+    if (listenTimeoutRef.current) {
+      clearTimeout(listenTimeoutRef.current)
+      listenTimeoutRef.current = null
+    }
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
+      try {
+        recognitionRef.current.stop()
+      } catch (e) {
+        // Ignore
+      }
     }
     setIsListening(false)
   }
@@ -234,15 +255,26 @@ export default function EmbeddedChat() {
   const autoStartListening = () => {
     if (!SpeechRecognition || !recognitionRef.current || !voiceEnabled) return
 
+    // Clear any existing timeout
+    if (listenTimeoutRef.current) {
+      clearTimeout(listenTimeoutRef.current)
+      listenTimeoutRef.current = null
+    }
+
     setIsListening(true)
 
     try {
       recognitionRef.current.start()
 
       // Auto-stop after 5 seconds if no speech detected
-      setTimeout(() => {
+      listenTimeoutRef.current = setTimeout(() => {
+        setIsListening(false)
         if (recognitionRef.current) {
-          recognitionRef.current.stop()
+          try {
+            recognitionRef.current.stop()
+          } catch (e) {
+            // Ignore
+          }
         }
       }, 5000)
     } catch (err) {
