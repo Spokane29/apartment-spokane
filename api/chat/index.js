@@ -9,7 +9,7 @@ const sessions = new Map();
 
 // Send lead to LeasingVoice API
 async function sendToLeadsAPI(leadData) {
-  const apiUrl = 'https://www.apartment-spokane.com/api/leads/external';
+  const apiUrl = 'https://www.leasingvoice.com/api/leads/external';
 
   const payload = {
     firstName: leadData.first_name || '',
