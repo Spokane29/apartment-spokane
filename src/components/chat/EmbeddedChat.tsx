@@ -24,6 +24,7 @@ export default function EmbeddedChat() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const voiceEnabledRef = useRef(true) // Ref to avoid stale closure in callbacks
 
   useEffect(() => {
     initChat()
@@ -60,6 +61,11 @@ export default function EmbeddedChat() {
       }
     }
   }, [])
+
+  // Keep voiceEnabledRef in sync with state (for callbacks)
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled
+  }, [voiceEnabled])
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -116,7 +122,7 @@ export default function EmbeddedChat() {
   }
 
   const speakText = async (text: string) => {
-    if (!voiceEnabled) return
+    if (!voiceEnabledRef.current) return
 
     try {
       setIsSpeaking(true)
@@ -291,7 +297,9 @@ export default function EmbeddedChat() {
 
   // Auto-start listening after AI speaks (with 5 second timeout)
   const autoStartListening = () => {
-    console.log('autoStartListening called, voiceEnabled:', voiceEnabled)
+    // Use ref to get current value (avoid stale closure)
+    const isVoiceEnabled = voiceEnabledRef.current
+    console.log('autoStartListening called, voiceEnabled:', isVoiceEnabled)
 
     if (!SpeechRecognition) {
       console.log('No SpeechRecognition support')
@@ -301,7 +309,7 @@ export default function EmbeddedChat() {
       console.log('No recognition ref')
       return
     }
-    if (!voiceEnabled) {
+    if (!isVoiceEnabled) {
       console.log('Voice disabled, skipping auto-listen')
       return
     }
