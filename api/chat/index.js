@@ -90,7 +90,7 @@ async function sendToLeadsAPI(leadData) {
   }
 }
 
-async function buildSystemPrompt(aiConfig) {
+async function buildSystemPrompt(aiConfig, collectedInfo = {}) {
   const { data: knowledgeBase } = await supabase
     .from('knowledge_base')
     .select('*')
@@ -124,11 +124,19 @@ CONFIRMATION RESPONSE (use ONLY after collecting ALL info including time):
 
 Replace {name}, {phone}, {email}, {tour_date}, {tour_time} with actual values. Do NOT add extra text after confirmation.
 
+ALREADY COLLECTED (do NOT ask for these again):
+${collectedInfo.first_name ? `- Name: ${collectedInfo.first_name}` : '- Name: NOT YET'}
+${collectedInfo.phone ? `- Phone: ${collectedInfo.phone}` : '- Phone: NOT YET'}
+${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
+${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
+${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
+
 ADDITIONAL RULES:
 - Keep ALL responses to 2-3 sentences max
 - Never make up information not in the knowledge base
 - Stay fair housing compliant
-- Don't use markdown formatting`;
+- Don't use markdown formatting
+- NEVER ask for info already collected above`;
   }
 
   // Fallback
@@ -144,7 +152,14 @@ ADDITIONAL RULES:
 - Available now, pet friendly
 - Browne's Addition
 
-Keep responses SHORT.`;
+ALREADY COLLECTED (do NOT ask again):
+${collectedInfo.first_name ? `- Name: ${collectedInfo.first_name}` : '- Name: NOT YET'}
+${collectedInfo.phone ? `- Phone: ${collectedInfo.phone}` : '- Phone: NOT YET'}
+${collectedInfo.email ? `- Email: ${collectedInfo.email}` : '- Email: NOT YET'}
+${collectedInfo.tour_date ? `- Tour Date: ${collectedInfo.tour_date}` : '- Tour Date: NOT YET'}
+${collectedInfo.tour_time ? `- Tour Time: ${collectedInfo.tour_time}` : '- Tour Time: NOT YET'}
+
+Keep responses SHORT. NEVER ask for info already collected.`;
 }
 
 function extractLeadInfo(messages) {
@@ -234,7 +249,7 @@ export default async function handler(req, res) {
     // Get AI config for confirmation template
     const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
 
-    const systemPrompt = await buildSystemPrompt(aiConfig);
+    const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info);
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 200, // Reduced to encourage shorter responses
