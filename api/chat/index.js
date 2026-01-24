@@ -7,43 +7,34 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 // In-memory session store (for serverless, consider using Redis or database)
 const sessions = new Map();
 
-// Send lead to external leads API
+// Send lead directly to database with south-oak-website source (for LeasingVoice tracking)
 async function sendToLeadsAPI(leadData) {
-  // Use Vercel URL or fallback to production domain
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'https://apartment-spokane.vercel.app';
-  const apiUrl = `${baseUrl}/api/leads/external`;
-
   const payload = {
-    firstName: leadData.first_name || '',
-    lastName: leadData.last_name || '',
+    first_name: leadData.first_name || '',
+    last_name: leadData.last_name || '',
     phone: leadData.phone || '',
     email: leadData.email || '',
-    propertyInterest: 'South Oak Apartment',
-    source: 'south-oak-website',
-    companyId: '322039f9-b67b-4084-b806-387ba26c4810',
     message: leadData.tour_date
       ? `Tour requested for ${leadData.tour_date}${leadData.tour_time ? ' at ' + leadData.tour_time : ''}`
-      : 'Interested via website chat'
+      : 'Interested via website chat',
+    property_interest: 'South Oak Apartment',
+    source: 'south-oak-website',
+    status: 'new'
   };
 
   try {
-    console.log('Sending lead to:', apiUrl);
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      redirect: 'follow',
-      body: JSON.stringify(payload)
-    });
+    console.log('Saving lead to LeasingVoice tracking:', payload.first_name, payload.phone);
+    const { data, error } = await supabase.from('leads').insert([payload]).select().single();
 
-    const result = await response.json();
-    console.log('Leads API response:', result);
-    return { success: response.ok, data: result };
+    if (error) {
+      console.error('LeasingVoice save error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    console.log('Lead saved with LeasingVoice source, id:', data.id);
+    return { success: true, data: { leadId: data.id } };
   } catch (error) {
-    console.error('Leads API error:', error.message);
+    console.error('LeasingVoice error:', error.message);
     return { success: false, error: error.message };
   }
 }
