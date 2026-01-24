@@ -71,6 +71,10 @@ function App() {
             <h1 className="text-base md:text-lg font-bold text-primary">Apartment-Spokane.com</h1>
             <p className="text-[10px] text-muted-foreground hidden sm:block">Pet Friendly Apartments in Browne's Addition</p>
           </div>
+          <div className="hidden md:flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full">
+            <MessageCircle className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-primary">AI Powered - Answer Questions or Book A Tour!</span>
+          </div>
           <a href="tel:8886130442" className="flex items-center gap-1.5 text-sm md:text-base font-bold text-primary hover:text-primary/80 transition-colors">
             <Phone className="w-4 h-4" />
             (888) 613-0442
