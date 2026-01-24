@@ -136,6 +136,7 @@ export default function EmbeddedChat() {
         audioRef.current = audio
 
         audio.onended = () => {
+          console.log('Audio ended, starting auto-listen')
           setIsSpeaking(false)
           // Auto-start listening after AI finishes speaking
           autoStartListening()
@@ -253,7 +254,20 @@ export default function EmbeddedChat() {
 
   // Auto-start listening after AI speaks (with 5 second timeout)
   const autoStartListening = () => {
-    if (!SpeechRecognition || !recognitionRef.current || !voiceEnabled) return
+    console.log('autoStartListening called, voiceEnabled:', voiceEnabled)
+
+    if (!SpeechRecognition) {
+      console.log('No SpeechRecognition support')
+      return
+    }
+    if (!recognitionRef.current) {
+      console.log('No recognition ref')
+      return
+    }
+    if (!voiceEnabled) {
+      console.log('Voice disabled, skipping auto-listen')
+      return
+    }
 
     // Clear any existing timeout
     if (listenTimeoutRef.current) {
@@ -261,26 +275,31 @@ export default function EmbeddedChat() {
       listenTimeoutRef.current = null
     }
 
-    setIsListening(true)
+    // Small delay to let the previous recognition fully stop
+    setTimeout(() => {
+      setIsListening(true)
 
-    try {
-      recognitionRef.current.start()
+      try {
+        recognitionRef.current.start()
+        console.log('Auto-listening started')
 
-      // Auto-stop after 5 seconds if no speech detected
-      listenTimeoutRef.current = setTimeout(() => {
-        setIsListening(false)
-        if (recognitionRef.current) {
-          try {
-            recognitionRef.current.stop()
-          } catch (e) {
-            // Ignore
+        // Auto-stop after 5 seconds if no speech detected
+        listenTimeoutRef.current = setTimeout(() => {
+          console.log('Auto-listen timeout - stopping')
+          setIsListening(false)
+          if (recognitionRef.current) {
+            try {
+              recognitionRef.current.stop()
+            } catch (e) {
+              // Ignore
+            }
           }
-        }
-      }, 5000)
-    } catch (err) {
-      console.error('Failed to auto-start listening:', err)
-      setIsListening(false)
-    }
+        }, 5000)
+      } catch (err: any) {
+        console.error('Failed to auto-start listening:', err.message)
+        setIsListening(false)
+      }
+    }, 300)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
