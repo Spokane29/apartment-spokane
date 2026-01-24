@@ -37,9 +37,14 @@ export default function Leads() {
   }
 
   async function deleteLead(id) {
-    if (!window.confirm('Are you sure you want to delete this lead?')) return;
+    console.log('deleteLead called with id:', id);
+    const confirmed = window.confirm('Are you sure you want to delete this lead?');
+    console.log('Confirmed:', confirmed);
+    if (!confirmed) return;
     try {
+      console.log('Deleting lead:', id);
       const res = await fetch(`/api/leads?id=${id}`, { method: 'DELETE' });
+      console.log('Delete response:', res.status);
       if (res.ok) {
         fetchLeads();
       } else {
@@ -48,15 +53,20 @@ export default function Leads() {
       }
     } catch (err) {
       console.error('Failed to delete lead:', err);
-      alert('Failed to delete lead');
+      alert('Failed to delete lead: ' + err.message);
     }
   }
 
   async function deleteSelected() {
+    console.log('deleteSelected called, ids:', selectedIds);
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Delete ${selectedIds.length} selected lead(s)?`)) return;
+    const confirmed = window.confirm(`Delete ${selectedIds.length} selected lead(s)?`);
+    console.log('Confirmed:', confirmed);
+    if (!confirmed) return;
     try {
+      console.log('Deleting leads:', selectedIds.join(','));
       const res = await fetch(`/api/leads?ids=${selectedIds.join(',')}`, { method: 'DELETE' });
+      console.log('Delete response:', res.status);
       if (res.ok) {
         fetchLeads();
       } else {
@@ -65,7 +75,7 @@ export default function Leads() {
       }
     } catch (err) {
       console.error('Failed to delete leads:', err);
-      alert('Failed to delete leads');
+      alert('Failed to delete leads: ' + err.message);
     }
   }
 
@@ -93,7 +103,8 @@ export default function Leads() {
         <h2>Leads</h2>
         {selectedIds.length > 0 && (
           <button
-            onClick={deleteSelected}
+            type="button"
+            onClick={() => { console.log('Button clicked'); deleteSelected(); }}
             style={{
               padding: '8px 16px',
               background: '#ef4444',
@@ -179,7 +190,8 @@ export default function Leads() {
                         View
                       </button>
                       <button
-                        onClick={() => deleteLead(lead.id)}
+                        type="button"
+                        onClick={() => { console.log('Row delete clicked:', lead.id); deleteLead(lead.id); }}
                         style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         Delete
