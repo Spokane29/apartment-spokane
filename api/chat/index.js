@@ -57,31 +57,20 @@ async function saveSession(session) {
     updated_at: new Date().toISOString()
   };
 
-  console.log('Saving session:', session.session_id, 'collected_info:', JSON.stringify(session.collected_info));
-  console.log('Full payload:', JSON.stringify(payload, null, 2));
-  console.log('Payload type checks:', {
-    collected_phone: typeof payload.collected_phone,
-    collected_phone_value: payload.collected_phone,
-    collected_email: typeof payload.collected_email,
-    collected_name: typeof payload.collected_name,
-  });
+  console.log('Saving session:', session.session_id);
 
   if (existing) {
-    console.log('Updating existing session...');
-    const { data: updateData, error: updateError } = await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id).select();
+    const { error: updateError } = await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id);
     if (updateError) {
       console.error('Session update error:', updateError.message);
       throw updateError;
     }
-    console.log('Update result:', JSON.stringify(updateData));
   } else {
-    console.log('Inserting new session...');
-    const { data: insertData, error: insertError } = await supabase.from('chat_sessions').insert([payload]).select();
+    const { error: insertError } = await supabase.from('chat_sessions').insert([payload]);
     if (insertError) {
       console.error('Session insert error:', insertError.message);
       throw insertError;
     }
-    console.log('Insert result:', JSON.stringify(insertData));
   }
 }
 
@@ -392,7 +381,6 @@ function extractLeadInfo(messages) {
 
   // Extract phone number
   const phoneMatch = userText.match(/\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})\b/);
-  console.log('Phone regex test on:', userText, '→ match:', phoneMatch);
   if (phoneMatch) leadInfo.phone = phoneMatch[1].replace(/[-.\s]/g, '');
 
   // Extract email - be more permissive
@@ -590,13 +578,10 @@ export default async function handler(req, res) {
     session.lead_captured = hasMinimumInfo;
     session.tour_booked = !!(info.tour_date) && hasMinimumInfo;
     session.collected_name = !!info.first_name;
-    session.collected_phone = info.phone ? true : false;
+    session.collected_phone = !!info.phone;
     session.collected_email = !!info.email;
     session.collected_tour_date = !!info.tour_date;
     session.message_count = session.message_count + 1; // +1 for assistant response
-
-    console.log('DEBUG: session.collected_phone =', session.collected_phone, 'type:', typeof session.collected_phone);
-    console.log('DEBUG: info.phone =', info.phone, 'type:', typeof info.phone);
 
     // Save session to database
     let saveError = null;
@@ -607,15 +592,7 @@ export default async function handler(req, res) {
       saveError = saveErr.message;
     }
 
-    res.json({
-      message: assistantMessage,
-      sessionId: session.session_id,
-      _debug: {
-        collected_info: session.collected_info,
-        message_count: session.message_count,
-        saveError: saveError
-      }
-    });
+    res.json({ message: assistantMessage, sessionId: session.session_id });
   } catch (error) {
     console.error('Chat error:', error.message, error.stack);
     res.status(500).json({ error: 'Failed to process message', details: error.message });
