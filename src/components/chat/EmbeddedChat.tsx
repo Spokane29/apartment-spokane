@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Send, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 import './embedded-chat.css'
 
@@ -8,49 +8,10 @@ interface Message {
   content: string
 }
 
-// Web Speech API types
-interface SpeechRecognitionEvent {
-  results: SpeechRecognitionResultList
-  resultIndex: number
-}
-
-interface SpeechRecognitionResultList {
-  length: number
-  item(index: number): SpeechRecognitionResult
-  [index: number]: SpeechRecognitionResult
-}
-
-interface SpeechRecognitionResult {
-  isFinal: boolean
-  length: number
-  item(index: number): SpeechRecognitionAlternative
-  [index: number]: SpeechRecognitionAlternative
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string
-  confidence: number
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  abort(): void
-  onresult: ((event: SpeechRecognitionEvent) => void) | null
-  onerror: ((event: { error: string }) => void) | null
-  onend: (() => void) | null
-  onstart: (() => void) | null
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition
-    webkitSpeechRecognition: new () => SpeechRecognition
-  }
-}
+// Check if browser supports speech recognition
+const SpeechRecognition = typeof window !== 'undefined'
+  ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  : null
 
 export default function EmbeddedChat() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -60,30 +21,52 @@ export default function EmbeddedChat() {
   const [isListening, setIsListening] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [interimText, setInterimText] = useState('')
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const voiceEnabledRef = useRef(true)
-  const persistentAudioRef = useRef<HTMLAudioElement | null>(null)
-  const audioUnlockedRef = useRef(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const intentionalStopRef = useRef(false)
-  // Track if current conversation turn was initiated by voice
-  const voiceConversationActiveRef = useRef(false)
 
   useEffect(() => {
     initChat()
+
+    // Initialize speech recognition once
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = 'en-US'
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        console.log('Speech result:', transcript)
+        if (transcript.trim()) {
+          // Send the message directly instead of putting in input
+          sendMessageDirect(transcript.trim())
+        }
+        setIsListening(false)
+      }
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error)
+        setIsListening(false)
+      }
+
+      recognition.onend = () => {
+        console.log('Speech recognition ended')
+        setIsListening(false)
+      }
+
+      recognitionRef.current = recognition
+    }
+
     return () => {
-      stopListening()
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort()
+        } catch (e) {}
+      }
     }
   }, [])
-
-  useEffect(() => {
-    voiceEnabledRef.current = voiceEnabled
-  }, [voiceEnabled])
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -106,40 +89,8 @@ export default function EmbeddedChat() {
     }
   }
 
-  // Unlock audio playback on iOS
-  const unlockAudio = () => {
-    if (audioUnlockedRef.current) return
-
-    if (!persistentAudioRef.current) {
-      const audio = document.createElement('audio')
-      audio.setAttribute('playsinline', 'true')
-      audio.setAttribute('webkit-playsinline', 'true')
-      persistentAudioRef.current = audio
-    }
-
-    const silentAudio = persistentAudioRef.current
-    silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZDAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ=='
-    silentAudio.volume = 0.01
-    silentAudio.load()
-    silentAudio.play().then(() => {
-      audioUnlockedRef.current = true
-      console.log('iOS audio unlocked')
-    }).catch(() => {})
-  }
-
-  const handleVoiceInput = useCallback((text: string) => {
-    console.log('Voice result:', text)
-    if (!text.trim()) return
-
-    intentionalStopRef.current = true
-    voiceConversationActiveRef.current = true // Mark voice conversation as active
-    setInterimText('')
-    stopListening()
-    sendMessage(text.trim(), true) // true = from voice input
-  }, [])
-
   const speakText = async (text: string) => {
-    if (!voiceEnabledRef.current || !voiceConversationActiveRef.current) return
+    if (!voiceEnabled) return
 
     try {
       setIsSpeaking(true)
@@ -157,51 +108,13 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
-        let audio = persistentAudioRef.current
-        if (!audio) {
-          audio = document.createElement('audio')
-          audio.setAttribute('playsinline', 'true')
-          audio.setAttribute('webkit-playsinline', 'true')
-          persistentAudioRef.current = audio
-        }
+        const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
         audioRef.current = audio
-
-        audio.onended = null
-        audio.onerror = null
-
-        audio.src = `data:audio/mpeg;base64,${data.audio}`
-        audio.volume = 1.0
-
-        audio.onended = () => {
-          console.log('Audio ended, starting auto-listen')
-          setIsSpeaking(false)
-          // Only auto-listen if voice conversation is still active
-          if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
-            setTimeout(() => startListening(true), 300)
-          }
-        }
-
-        audio.onerror = () => {
-          console.error('Audio playback error')
-          setIsSpeaking(false)
-          if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
-            setTimeout(() => startListening(true), 300)
-          }
-        }
-
-        audio.load()
-        audio.play().catch(err => {
-          console.error('Audio play failed:', err)
-          setIsSpeaking(false)
-          if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
-            setTimeout(() => startListening(true), 300)
-          }
-        })
+        audio.onended = () => setIsSpeaking(false)
+        audio.onerror = () => setIsSpeaking(false)
+        await audio.play()
       } else {
         setIsSpeaking(false)
-        if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
-          setTimeout(() => startListening(true), 300)
-        }
       }
     } catch (err) {
       console.error('Failed to speak:', err)
@@ -217,16 +130,40 @@ export default function EmbeddedChat() {
     setIsSpeaking(false)
   }
 
-  const sendMessage = async (messageText?: string, fromVoice = false) => {
-    const text = messageText || input.trim()
+  // Direct send for voice input
+  const sendMessageDirect = async (text: string) => {
     if (!text || isLoading) return
 
-    unlockAudio()
+    const userMessage: Message = { id: Date.now(), role: 'user', content: text }
+    setMessages(prev => [...prev, userMessage])
+    setIsLoading(true)
 
-    // If user types a message, deactivate voice conversation mode
-    if (!fromVoice) {
-      voiceConversationActiveRef.current = false
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, sessionId }),
+      })
+      const data = await res.json()
+      setSessionId(data.sessionId)
+      const assistantMessage = data.message
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
+
+      // Speak the response if voice is enabled
+      if (voiceEnabled && assistantMessage) {
+        speakText(assistantMessage)
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err)
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again or call us at (888) 613-0442." }])
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  const sendMessage = async (messageText?: string) => {
+    const text = messageText || input.trim()
+    if (!text || isLoading) return
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
@@ -244,189 +181,44 @@ export default function EmbeddedChat() {
       const assistantMessage = data.message
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
 
-      // Only speak response if voice is enabled AND the user used voice input
-      if (voiceEnabled && fromVoice && assistantMessage) {
-        speakText(assistantMessage)
-      }
+      // Don't speak for typed messages - only for voice input
     } catch (err) {
       console.error('Failed to send message:', err)
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again or call us at (888) 613-0442." }])
     } finally {
       setIsLoading(false)
-      // Refocus input after sending
-      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 
-  // Start Web Speech API listening with mobile fixes
-  const startListening = async (isAutoStart = false, retryCount = 0) => {
-    unlockAudio()
-    stopSpeaking()
-
-    // Check if Web Speech API is available
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  const toggleListening = () => {
     if (!SpeechRecognition) {
-      alert('Voice recognition is not supported in this browser. Please use Chrome, Safari, or Edge.')
+      alert('Speech recognition is not supported in your browser. Please use Chrome, Safari, or Edge.')
       return
     }
 
-    // Request microphone permission explicitly first (helps with some browsers)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // Immediately stop the stream - we just needed permission
-      stream.getTracks().forEach(track => track.stop())
-      console.log('Microphone permission granted')
-    } catch (err) {
-      console.error('Microphone permission denied:', err)
-      alert('Microphone access is required for voice input. Please allow microphone access and try again.')
-      return
-    }
-
-    // Clear any existing timeout
-    if (listenTimeoutRef.current) {
-      clearTimeout(listenTimeoutRef.current)
-      listenTimeoutRef.current = null
-    }
-
-    // CRITICAL: Fully cleanup old recognition before creating new
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort()
-      } catch (e) {}
-      recognitionRef.current = null
-    }
-
-    // Short delay to let browser release mic from getUserMedia
-    const delay = isAutoStart ? 300 : 50
-
-    await new Promise(resolve => setTimeout(resolve, delay))
-
-    try {
-      // ALWAYS create fresh recognition instance (mobile fix)
-      const recognition = new SpeechRecognition()
-      recognitionRef.current = recognition
-      intentionalStopRef.current = false
-
-      recognition.continuous = false
-      recognition.interimResults = true
-      recognition.lang = 'en-US'
-
-      recognition.onstart = () => {
-        console.log('Speech recognition started successfully')
-        setIsListening(true)
-        setInterimText('')
-      }
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalTranscript = ''
-        let interimTranscript = ''
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i]
-          if (result.isFinal) {
-            finalTranscript += result[0].transcript
-          } else {
-            interimTranscript += result[0].transcript
-          }
-        }
-
-        if (interimTranscript) {
-          setInterimText(interimTranscript)
-        }
-
-        if (finalTranscript) {
-          console.log('Final transcript:', finalTranscript)
-          handleVoiceInput(finalTranscript)
-        }
-      }
-
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error)
-        setIsListening(false)
-        setInterimText('')
-
-        // Handle specific errors
-        if (event.error === 'not-allowed') {
-          // User denied permission or permission not granted
-          if (!isAutoStart) {
-            alert('Microphone access was denied. Please enable microphone permissions in your browser settings to use voice input.')
-          }
-          return // Don't retry permission errors
-        }
-
-        if (event.error === 'aborted') {
-          // Recognition was aborted - this often happens on mobile when switching apps or locking screen
-          // Don't retry manual starts, only auto-starts
-          if (!isAutoStart) return
-        }
-
-        if (event.error === 'no-speech') {
-          // No speech detected - don't retry, user can tap again
-          return
-        }
-
-        // For other errors (network, audio-capture, etc.), retry if auto-start
-        if (!intentionalStopRef.current && isAutoStart && retryCount < 2) {
-          console.log(`Speech error (${event.error}), retrying (attempt ${retryCount + 1})`)
-          setTimeout(() => startListening(isAutoStart, retryCount + 1), 1000)
-        }
-      }
-
-      recognition.onend = () => {
-        console.log('Speech recognition ended, intentional:', intentionalStopRef.current)
-        setIsListening(false)
-        setInterimText('')
-
-        // Only retry if this was an unexpected end during auto-listen
-        // and we haven't already retried too many times
-        if (!intentionalStopRef.current && isAutoStart && retryCount < 2) {
-          console.log(`Recognition ended unexpectedly, retrying (attempt ${retryCount + 1})`)
-          setTimeout(() => startListening(isAutoStart, retryCount + 1), 1000)
-        }
-      }
-
-      // Don't set isListening before start() - wait for onstart event
-      // This prevents the "flash" when recognition fails to start
-      recognition.start()
-      console.log('Speech recognition start() called')
-
-      // Auto-stop after timeout
-      const timeout = isAutoStart ? 10000 : 30000
-      listenTimeoutRef.current = setTimeout(() => {
-        console.log('Listen timeout')
-        intentionalStopRef.current = true
-        stopListening()
-      }, timeout)
-
-    } catch (err) {
-      console.error('Failed to start speech recognition:', err)
+    if (isListening) {
+      recognitionRef.current?.stop()
       setIsListening(false)
-
-      // Retry up to 2 times (mobile fix) but only for auto-starts
-      if (retryCount < 2 && isAutoStart) {
-        console.log(`Retrying speech recognition (attempt ${retryCount + 1})`)
-        setTimeout(() => startListening(isAutoStart, retryCount + 1), 1000)
+    } else {
+      stopSpeaking() // Stop any playing audio
+      try {
+        recognitionRef.current?.start()
+        setIsListening(true)
+      } catch (err) {
+        console.error('Failed to start listening:', err)
+        // Recognition might already be running, try to restart
+        try {
+          recognitionRef.current?.stop()
+          setTimeout(() => {
+            recognitionRef.current?.start()
+            setIsListening(true)
+          }, 100)
+        } catch (e) {
+          console.error('Failed to restart listening:', e)
+          setIsListening(false)
+        }
       }
     }
-  }
-
-  const stopListening = () => {
-    intentionalStopRef.current = true
-
-    if (listenTimeoutRef.current) {
-      clearTimeout(listenTimeoutRef.current)
-      listenTimeoutRef.current = null
-    }
-
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort()
-      } catch (e) {}
-      recognitionRef.current = null
-    }
-
-    setIsListening(false)
-    setInterimText('')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -443,19 +235,10 @@ export default function EmbeddedChat() {
           type="button"
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
           onClick={() => {
-            unlockAudio()
-            const newState = !voiceEnabled
-            setVoiceEnabled(newState)
-            if (!newState) {
-              // When disabling voice, stop everything
-              stopSpeaking()
-              stopListening()
-              voiceConversationActiveRef.current = false
-            }
-            // Refocus input after clicking
-            setTimeout(() => inputRef.current?.focus(), 0)
+            setVoiceEnabled(!voiceEnabled)
+            if (voiceEnabled) stopSpeaking()
           }}
-          tabIndex={-1}
+          title={voiceEnabled ? 'Disable voice responses' : 'Enable voice responses'}
         >
           {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
@@ -485,32 +268,18 @@ export default function EmbeddedChat() {
             <Volume2 size={14} className="pulse" /> Speaking...
           </div>
         )}
-        {interimText && (
-          <div className="interim-text">
-            <Mic size={14} /> {interimText}...
-          </div>
-        )}
       </div>
 
       <form className="embedded-chat-input" onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
         <button
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            console.log('Mic button clicked, isListening:', isListening)
-            if (isListening) {
-              stopListening()
-            } else {
-              startListening()
-            }
-          }}
+          onClick={toggleListening}
           disabled={isLoading || isSpeaking}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
         <input
-          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
