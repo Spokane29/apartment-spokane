@@ -57,19 +57,24 @@ async function saveSession(session) {
   };
 
   console.log('Saving session:', session.session_id, 'collected_info:', JSON.stringify(session.collected_info));
+  console.log('Full payload being saved:', JSON.stringify(payload));
 
   if (existing) {
-    const { error: updateError } = await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id);
+    console.log('Updating existing session...');
+    const { data: updateData, error: updateError } = await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id).select();
     if (updateError) {
       console.error('Session update error:', updateError.message);
       throw updateError;
     }
+    console.log('Update result:', JSON.stringify(updateData));
   } else {
-    const { error: insertError } = await supabase.from('chat_sessions').insert([payload]);
+    console.log('Inserting new session...');
+    const { data: insertData, error: insertError } = await supabase.from('chat_sessions').insert([payload]).select();
     if (insertError) {
       console.error('Session insert error:', insertError.message);
       throw insertError;
     }
+    console.log('Insert result:', JSON.stringify(insertData));
   }
 }
 
