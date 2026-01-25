@@ -5,10 +5,10 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Mobile: taller chat, larger touch targets */
+/* Mobile: shorter chat to show more content below */
 @media (max-width: 768px) {
   .embedded-chat {
-    height: 380px;
+    height: 280px;
   }
 }
 
