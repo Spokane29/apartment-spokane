@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 import './embedded-chat.css'
 
@@ -25,40 +25,21 @@ export default function EmbeddedChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
+  const voiceEnabledRef = useRef(true)
+  const pendingTranscriptRef = useRef<string | null>(null)
+
+  // Keep refs in sync
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled
+  }, [voiceEnabled])
 
   useEffect(() => {
     initChat()
-
-    // Initialize speech recognition once
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition()
-      recognition.continuous = false
-      recognition.interimResults = false
-      recognition.lang = 'en-US'
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript
-        console.log('Speech result:', transcript)
-        if (transcript.trim()) {
-          // Send the message directly instead of putting in input
-          sendMessageDirect(transcript.trim())
-        }
-        setIsListening(false)
-      }
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error)
-        setIsListening(false)
-      }
-
-      recognition.onend = () => {
-        console.log('Speech recognition ended')
-        setIsListening(false)
-      }
-
-      recognitionRef.current = recognition
-    }
-
     return () => {
       if (recognitionRef.current) {
         try {
@@ -130,37 +111,6 @@ export default function EmbeddedChat() {
     setIsSpeaking(false)
   }
 
-  // Direct send for voice input
-  const sendMessageDirect = async (text: string) => {
-    if (!text || isLoading) return
-
-    const userMessage: Message = { id: Date.now(), role: 'user', content: text }
-    setMessages(prev => [...prev, userMessage])
-    setIsLoading(true)
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId }),
-      })
-      const data = await res.json()
-      setSessionId(data.sessionId)
-      const assistantMessage = data.message
-      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
-
-      // Speak the response if voice is enabled
-      if (voiceEnabled && assistantMessage) {
-        speakText(assistantMessage)
-      }
-    } catch (err) {
-      console.error('Failed to send message:', err)
-      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again or call us at (888) 613-0442." }])
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const sendMessage = async (messageText?: string) => {
     const text = messageText || input.trim()
     if (!text || isLoading) return
@@ -201,23 +151,80 @@ export default function EmbeddedChat() {
       setIsListening(false)
     } else {
       stopSpeaking() // Stop any playing audio
-      try {
-        recognitionRef.current?.start()
+
+      // Create fresh recognition instance each time (fixes Chrome issues)
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = 'en-US'
+
+      recognition.onstart = () => {
+        console.log('Speech recognition started')
         setIsListening(true)
-      } catch (err) {
-        console.error('Failed to start listening:', err)
-        // Recognition might already be running, try to restart
-        try {
-          recognitionRef.current?.stop()
-          setTimeout(() => {
-            recognitionRef.current?.start()
-            setIsListening(true)
-          }, 100)
-        } catch (e) {
-          console.error('Failed to restart listening:', e)
-          setIsListening(false)
+      }
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        console.log('Speech result:', transcript)
+        setIsListening(false)
+        if (transcript.trim()) {
+          // Store transcript and process it
+          pendingTranscriptRef.current = transcript.trim()
+          handleVoiceResult(transcript.trim())
         }
       }
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error)
+        setIsListening(false)
+      }
+
+      recognition.onend = () => {
+        console.log('Speech recognition ended')
+        setIsListening(false)
+      }
+
+      recognitionRef.current = recognition
+
+      try {
+        recognition.start()
+        console.log('Recognition start() called')
+      } catch (err) {
+        console.error('Failed to start listening:', err)
+        setIsListening(false)
+      }
+    }
+  }
+
+  // Handle voice result - send message and speak response
+  const handleVoiceResult = async (text: string) => {
+    if (!text || isLoading) return
+
+    const userMessage: Message = { id: Date.now(), role: 'user', content: text }
+    setMessages(prev => [...prev, userMessage])
+    setIsLoading(true)
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, sessionId: sessionIdRef.current }),
+      })
+      const data = await res.json()
+      setSessionId(data.sessionId)
+      sessionIdRef.current = data.sessionId
+      const assistantMessage = data.message
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
+
+      // Speak the response if voice is enabled
+      if (voiceEnabledRef.current && assistantMessage) {
+        speakText(assistantMessage)
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err)
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again or call us at (888) 613-0442." }])
+    } finally {
+      setIsLoading(false)
     }
   }
 
