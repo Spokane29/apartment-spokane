@@ -282,9 +282,6 @@ export default function EmbeddedChat() {
 
     await new Promise(resolve => setTimeout(resolve, delay))
 
-    // Note: We removed getUserMedia here because SpeechRecognition handles its own mic access
-    // and calling getUserMedia can conflict on iOS Safari
-
     try {
       // ALWAYS create fresh recognition instance (mobile fix)
       const recognition = new SpeechRecognition()
@@ -296,7 +293,7 @@ export default function EmbeddedChat() {
       recognition.lang = 'en-US'
 
       recognition.onstart = () => {
-        console.log('Speech recognition started')
+        console.log('Speech recognition started successfully')
         setIsListening(true)
         setInterimText('')
       }
@@ -329,10 +326,30 @@ export default function EmbeddedChat() {
         setIsListening(false)
         setInterimText('')
 
-        // If not intentional stop and auto-start, retry
+        // Handle specific errors
+        if (event.error === 'not-allowed') {
+          // User denied permission or permission not granted
+          if (!isAutoStart) {
+            alert('Microphone access was denied. Please enable microphone permissions in your browser settings to use voice input.')
+          }
+          return // Don't retry permission errors
+        }
+
+        if (event.error === 'aborted') {
+          // Recognition was aborted - this often happens on mobile when switching apps or locking screen
+          // Don't retry manual starts, only auto-starts
+          if (!isAutoStart) return
+        }
+
+        if (event.error === 'no-speech') {
+          // No speech detected - don't retry, user can tap again
+          return
+        }
+
+        // For other errors (network, audio-capture, etc.), retry if auto-start
         if (!intentionalStopRef.current && isAutoStart && retryCount < 2) {
-          console.log(`Speech error, retrying (attempt ${retryCount + 1})`)
-          setTimeout(() => startListening(isAutoStart, retryCount + 1), 800)
+          console.log(`Speech error (${event.error}), retrying (attempt ${retryCount + 1})`)
+          setTimeout(() => startListening(isAutoStart, retryCount + 1), 1000)
         }
       }
 
@@ -341,15 +358,16 @@ export default function EmbeddedChat() {
         setIsListening(false)
         setInterimText('')
 
-        // If recognition ended unexpectedly during auto-listen, retry
+        // Only retry if this was an unexpected end during auto-listen
+        // and we haven't already retried too many times
         if (!intentionalStopRef.current && isAutoStart && retryCount < 2) {
           console.log(`Recognition ended unexpectedly, retrying (attempt ${retryCount + 1})`)
-          setTimeout(() => startListening(isAutoStart, retryCount + 1), 800)
+          setTimeout(() => startListening(isAutoStart, retryCount + 1), 1000)
         }
       }
 
-      // Set listening state early before start() to reduce flicker
-      setIsListening(true)
+      // Don't set isListening before start() - wait for onstart event
+      // This prevents the "flash" when recognition fails to start
       recognition.start()
       console.log('Speech recognition start() called')
 
@@ -365,10 +383,10 @@ export default function EmbeddedChat() {
       console.error('Failed to start speech recognition:', err)
       setIsListening(false)
 
-      // Retry up to 2 times (mobile fix)
+      // Retry up to 2 times (mobile fix) but only for auto-starts
       if (retryCount < 2 && isAutoStart) {
         console.log(`Retrying speech recognition (attempt ${retryCount + 1})`)
-        setTimeout(() => startListening(isAutoStart, retryCount + 1), 800)
+        setTimeout(() => startListening(isAutoStart, retryCount + 1), 1000)
       }
     }
   }
