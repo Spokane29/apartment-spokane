@@ -307,6 +307,8 @@ DO NOT ask for email again.` : ''}
 - Max 2 sentences
 - No exclamation points
 - Accept any email with @ symbol (like user@gmail.com)
+- If user declines, skips, or doesn't answer a question, MOVE ON to the next question. Don't push.
+- We only need phone OR email to complete - not both required.
 
 Last user message: "${lastUserMessage}"
 ${customRules ? `\nCustom rules:\n${customRules}` : ''}`;
@@ -352,6 +354,8 @@ DO NOT ask for email again.` : ''}
 - Message count: ${messageCount}. ${messageCount > 0 ? 'NO greetings' : ''}
 - Max 2 sentences, no exclamation points
 - Accept any email with @ symbol
+- If user declines or skips a question, MOVE ON to the next. Don't push.
+- We only need phone OR email to complete - not both required.
 
 Last message: "${lastUserMessage}"
 ${customRules ? `\nCustom rules:\n${customRules}` : ''}`;
@@ -595,9 +599,9 @@ export default async function handler(req, res) {
     const assistantMessage = response.content[0].text;
     session.messages.push({ role: 'assistant', content: assistantMessage });
 
-    // Check if we have minimum required info (firstName + phone)
+    // Check if we have minimum required info (phone OR email)
     const info = session.collected_info;
-    const hasMinimumInfo = info.first_name && info.phone;
+    const hasMinimumInfo = info.phone || info.email;
 
     // Save lead to Supabase
     if (hasMinimumInfo && !session.lead_id) {
@@ -633,17 +637,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // Send to LeasingVoice API - wait until we have ALL required info (name, phone, email)
-    // This ensures the lead has complete contact info before being sent
-    const hasCompleteInfo = info.first_name && info.phone && info.email;
+    // Send to LeasingVoice API - send once we have phone OR email
+    // Don't require all fields - send partial leads too
+    const hasContactInfo = info.phone || info.email;
     console.log('Lead status check:', {
       hasMinimumInfo,
-      hasCompleteInfo,
+      hasContactInfo,
       lead_sent_to_leasingvoice: session.lead_sent_to_leasingvoice,
       info
     });
-    if (hasCompleteInfo && !session.lead_sent_to_leasingvoice) {
-      console.log('Sending complete lead to LeasingVoice:', info);
+    if (hasContactInfo && !session.lead_sent_to_leasingvoice) {
+      console.log('Sending lead to LeasingVoice:', info);
       const result = await sendToLeadsAPI({
         first_name: info.first_name,
         last_name: info.last_name || '',
