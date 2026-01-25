@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Send, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 import './embedded-chat.css'
 
@@ -8,44 +8,27 @@ interface Message {
   content: string
 }
 
-// Check if browser supports speech recognition
-const SpeechRecognition = typeof window !== 'undefined'
-  ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  : null
-
 export default function EmbeddedChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [isListening, setIsListening] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const sessionIdRef = useRef<string | null>(null)
-  const voiceEnabledRef = useRef(true)
-  const isListeningRef = useRef(false)
-
-  // Keep refs in sync
-  useEffect(() => {
-    sessionIdRef.current = sessionId
-  }, [sessionId])
-
-  useEffect(() => {
-    voiceEnabledRef.current = voiceEnabled
-  }, [voiceEnabled])
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     initChat()
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort()
-        } catch (e) {}
-      }
+      stopRecording()
+      stopSpeaking()
     }
   }, [])
 
@@ -111,7 +94,8 @@ export default function EmbeddedChat() {
     setIsSpeaking(false)
   }
 
-  const sendMessage = async (messageText?: string) => {
+  // Send message to chat API (same for text and voice input)
+  const sendMessage = async (messageText?: string, fromVoice = false) => {
     const text = messageText || input.trim()
     if (!text || isLoading) return
 
@@ -131,107 +115,8 @@ export default function EmbeddedChat() {
       const assistantMessage = data.message
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
 
-      // Don't speak for typed messages - only for voice input
-    } catch (err) {
-      console.error('Failed to send message:', err)
-      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again or call us at (888) 613-0442." }])
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const toggleListening = () => {
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome, Safari, or Edge.')
-      return
-    }
-
-    // Use ref to check current state (avoids stale closure)
-    if (isListeningRef.current) {
-      recognitionRef.current?.stop()
-      isListeningRef.current = false
-      setIsListening(false)
-      return
-    }
-
-    // Stop any playing audio without triggering re-render
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
-
-    // Create fresh recognition instance each time (fixes Chrome issues)
-    const recognition = new SpeechRecognition()
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-
-    recognition.onstart = () => {
-      console.log('Speech recognition started')
-      isListeningRef.current = true
-      setIsListening(true)
-    }
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript
-      console.log('Speech result:', transcript)
-      isListeningRef.current = false
-      setIsListening(false)
-      if (transcript.trim()) {
-        handleVoiceResult(transcript.trim())
-      }
-    }
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error)
-      isListeningRef.current = false
-      setIsListening(false)
-    }
-
-    recognition.onend = () => {
-      console.log('Speech recognition ended')
-      isListeningRef.current = false
-      setIsListening(false)
-    }
-
-    recognitionRef.current = recognition
-
-    // Set state BEFORE starting to avoid race condition
-    isListeningRef.current = true
-    setIsListening(true)
-
-    try {
-      recognition.start()
-      console.log('Recognition start() called')
-    } catch (err) {
-      console.error('Failed to start listening:', err)
-      isListeningRef.current = false
-      setIsListening(false)
-    }
-  }
-
-  // Handle voice result - send message and speak response
-  const handleVoiceResult = async (text: string) => {
-    if (!text || isLoading) return
-
-    const userMessage: Message = { id: Date.now(), role: 'user', content: text }
-    setMessages(prev => [...prev, userMessage])
-    setIsLoading(true)
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId: sessionIdRef.current }),
-      })
-      const data = await res.json()
-      setSessionId(data.sessionId)
-      sessionIdRef.current = data.sessionId
-      const assistantMessage = data.message
-      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
-
-      // Speak the response if voice is enabled
-      if (voiceEnabledRef.current && assistantMessage) {
+      // Speak the response if voice input was used
+      if (fromVoice && voiceEnabled && assistantMessage) {
         speakText(assistantMessage)
       }
     } catch (err) {
@@ -242,12 +127,132 @@ export default function EmbeddedChat() {
     }
   }
 
+  // Start recording audio
+  const startRecording = async () => {
+    try {
+      // Stop any playing audio first
+      stopSpeaking()
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      audioChunksRef.current = []
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm'
+      })
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        // Clean up stream
+        stream.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+
+        if (audioChunksRef.current.length === 0) {
+          console.log('No audio recorded')
+          return
+        }
+
+        // Create blob and transcribe
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        await transcribeAudio(audioBlob)
+      }
+
+      mediaRecorderRef.current = mediaRecorder
+      mediaRecorder.start()
+      setIsRecording(true)
+      console.log('Recording started')
+    } catch (err) {
+      console.error('Failed to start recording:', err)
+      alert('Could not access microphone. Please check your browser permissions.')
+    }
+  }
+
+  // Stop recording audio
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    setIsRecording(false)
+    console.log('Recording stopped')
+  }
+
+  // Transcribe audio using Deepgram
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true)
+
+    try {
+      // Convert blob to base64
+      const reader = new FileReader()
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string
+          // Remove data URL prefix
+          const base64 = result.split(',')[1]
+          resolve(base64)
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(audioBlob)
+      })
+
+      const res = await fetch('/api/voice/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: base64Audio }),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        console.error('Transcription error:', error)
+        setIsTranscribing(false)
+        return
+      }
+
+      const data = await res.json()
+      const transcript = data.transcript?.trim()
+
+      if (transcript) {
+        console.log('Transcribed:', transcript)
+        // Send the transcribed text as a message (same as typing)
+        await sendMessage(transcript, true)
+      } else {
+        console.log('No speech detected')
+      }
+    } catch (err) {
+      console.error('Transcription failed:', err)
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
+
+  // Toggle recording on/off
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
     }
   }
+
+  const isBusy = isLoading || isTranscribing
 
   return (
     <div className="embedded-chat">
@@ -284,6 +289,11 @@ export default function EmbeddedChat() {
             </div>
           </div>
         )}
+        {isTranscribing && (
+          <div className="transcribing-indicator">
+            <Mic size={14} className="pulse" /> Transcribing...
+          </div>
+        )}
         {isSpeaking && (
           <div className="speaking-indicator">
             <Volume2 size={14} className="pulse" /> Speaking...
@@ -294,11 +304,12 @@ export default function EmbeddedChat() {
       <form className="embedded-chat-input" onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
         <button
           type="button"
-          className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={toggleListening}
-          disabled={isLoading || isSpeaking}
+          className={`mic-button ${isRecording ? 'recording' : ''}`}
+          onClick={toggleRecording}
+          disabled={isBusy || isSpeaking}
+          title={isRecording ? 'Stop recording' : 'Start recording'}
         >
-          {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+          {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
         <input
           type="text"
@@ -306,9 +317,9 @@ export default function EmbeddedChat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message..."
-          disabled={isLoading}
+          disabled={isBusy}
         />
-        <button type="submit" disabled={isLoading || !input.trim()}>
+        <button type="submit" disabled={isBusy || !input.trim()}>
           <Send size={16} />
         </button>
       </form>

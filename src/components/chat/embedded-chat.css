@@ -212,7 +212,7 @@
   cursor: not-allowed;
 }
 
-.mic-button.listening {
+.mic-button.recording {
   background: #ef4444;
   color: white;
   animation: micPulse 1.5s infinite;
@@ -221,6 +221,19 @@
 @keyframes micPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+.transcribing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  color: #d97706;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-top: 8px;
+  align-self: flex-start;
 }
 
 .speaking-indicator {
