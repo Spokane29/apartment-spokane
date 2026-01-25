@@ -524,14 +524,16 @@ export default async function handler(req, res) {
       }).eq('id', session.lead_id);
     }
 
-    // Also send to LeasingVoice API (only once per session)
-    if (hasMinimumInfo && !session.lead_sent_to_leasingvoice) {
-      console.log('Sending lead to LeasingVoice:', info);
+    // Send to LeasingVoice API - wait until we have ALL required info (name, phone, email)
+    // This ensures the lead has complete contact info before being sent
+    const hasCompleteInfo = info.first_name && info.phone && info.email;
+    if (hasCompleteInfo && !session.lead_sent_to_leasingvoice) {
+      console.log('Sending complete lead to LeasingVoice:', info);
       const result = await sendToLeadsAPI({
         first_name: info.first_name,
         last_name: info.last_name || '',
         phone: info.phone,
-        email: info.email || '',
+        email: info.email,
         tour_date: info.tour_date || '',
         tour_time: info.tour_time || ''
       });
