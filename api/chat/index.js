@@ -595,7 +595,14 @@ export default async function handler(req, res) {
       console.error('Session save error (non-fatal):', saveErr.message);
     }
 
-    res.json({ message: assistantMessage, sessionId: session.session_id });
+    res.json({
+      message: assistantMessage,
+      sessionId: session.session_id,
+      _debug: {
+        collected_info: session.collected_info,
+        message_count: session.message_count
+      }
+    });
   } catch (error) {
     console.error('Chat error:', error.message, error.stack);
     res.status(500).json({ error: 'Failed to process message', details: error.message });
