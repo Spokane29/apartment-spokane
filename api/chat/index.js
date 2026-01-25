@@ -160,10 +160,11 @@ async function sendToLeadsAPI(leadData) {
 }
 
 async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0, lastUserMessage = '') {
+  // Only fetch the 'complete' category - this is what the admin panel edits
   const { data: knowledgeBase } = await supabase
     .from('knowledge_base')
     .select('*')
-    .order('category', { ascending: true });
+    .in('category', ['complete', 'template', 'rules']);
 
   // Get confirmation template (stored separately or use default)
   const templateEntry = (knowledgeBase || []).find(e => e.category === 'template');

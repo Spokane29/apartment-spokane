@@ -93,7 +93,7 @@ POLICIES
 - No smoking
 
 NEIGHBORHOOD
-- Historic Browne's Addition
+- Historic Spokane neighborhood
 - 2 blocks to restaurants, coffee shops, and pubs
 - Easy walk to downtown Spokane
 - Bus stop on corner
