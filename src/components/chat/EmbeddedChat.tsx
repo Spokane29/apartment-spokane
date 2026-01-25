@@ -242,17 +242,28 @@ export default function EmbeddedChat() {
 
       // Get Deepgram API key from server
       const tokenRes = await fetch('/api/voice/deepgram-token')
+      if (!tokenRes.ok) {
+        console.error('Failed to get Deepgram token:', tokenRes.status)
+        alert('Voice recognition not available. Please try again.')
+        streamRef.current?.getTracks().forEach(t => t.stop())
+        streamRef.current = null
+        return
+      }
       const tokenData = await tokenRes.json()
 
       if (!tokenData.key) {
-        console.error('No Deepgram key')
-        alert('Voice recognition not available')
+        console.error('No Deepgram key in response')
+        alert('Voice recognition not configured')
+        streamRef.current?.getTracks().forEach(t => t.stop())
+        streamRef.current = null
         return
       }
 
-      // Connect to Deepgram WebSocket
-      const wsUrl = `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true&smart_format=true&model=nova-2`
-      const ws = new WebSocket(wsUrl, ['token', tokenData.key])
+      console.log('Got Deepgram token, connecting...')
+
+      // Connect to Deepgram WebSocket with API key embedded as basic auth credentials
+      const wsUrl = `wss://${tokenData.key}:@api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true&smart_format=true&model=nova-2`
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -308,12 +319,17 @@ export default function EmbeddedChat() {
       }
 
       ws.onerror = (err) => {
-        console.error('Deepgram error:', err)
+        console.error('Deepgram WebSocket error:', err)
+        alert('Voice connection failed. Please try again.')
         stopListening()
       }
 
-      ws.onclose = () => {
-        console.log('Deepgram disconnected')
+      ws.onclose = (event) => {
+        console.log('Deepgram disconnected, code:', event.code, 'reason:', event.reason)
+        if (event.code !== 1000 && event.code !== 1005) {
+          // Abnormal close - might be auth issue
+          console.error('WebSocket closed abnormally')
+        }
         setIsListening(false)
       }
 
