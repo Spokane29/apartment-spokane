@@ -1146,6 +1146,9 @@ if (micStreamRef.current) {
 | 1.19 | - | Stronger anti-reset rules (NEVER say "Hi there" at top of prompt) |
 | 1.20 | - | Voice preprocessing for spoken emails ("joe at gmail dot com") |
 | 1.21 | - | iOS audio fixes: playsinline attributes, load() before play(), unlockAudio() |
+| 1.22 | - | Knowledge Base now only reads 'complete' category (admin-editable content) |
+| 1.23 | - | Removed "Browne's Addition" from fallback prompts and placeholder text |
+| 1.24 | - | Reverted from Deepgram to Web Speech API (Deepgram WebSocket auth issues in browsers) |
 
 ---
 

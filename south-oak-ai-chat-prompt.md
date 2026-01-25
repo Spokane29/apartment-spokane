@@ -146,7 +146,7 @@ any questions in person."
 ## South Oak Apartments
 
 **Address:** 104 S Oak St, Spokane, WA 99204
-**Neighborhood:** Browne's Addition
+**Neighborhood:** Historic Spokane neighborhood
 
 ### Units
 - [Add unit types, sizes, and current pricing]
@@ -171,7 +171,7 @@ any questions in person."
 ### Location & Neighborhood
 
 ```markdown
-## Browne's Addition
+## Location & Neighborhood
 
 Historic neighborhood with tree-lined streets and classic architecture.
 
