@@ -431,11 +431,25 @@ function extractLeadInfo(messages) {
     leadInfo.tour_date = dateMatch[1];
   }
 
-  // Extract tour time
-  const timePattern = /(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)|morning|afternoon|noon|evening)/i;
-  const timeMatch = userText.match(timePattern);
-  if (timeMatch) {
-    leadInfo.tour_time = timeMatch[1];
+  // Extract tour time - handle various voice transcription formats
+  const timePatterns = [
+    // "at 2pm", "at 2:00pm", "at 2 pm"
+    /at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?)/i,
+    // "2pm", "2:00pm", "2 pm" standalone
+    /(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))/i,
+    // "morning", "afternoon", "noon", "evening"
+    /\b(morning|afternoon|noon|evening)\b/i,
+    // "2 o'clock", "two o'clock"
+    /(\w+)\s*o'?\s*clock/i,
+    // Standalone number after "at" like "at 2" (assume pm for business hours)
+    /at\s+(\d{1,2})(?:\s|$|,)/i
+  ];
+  for (const pattern of timePatterns) {
+    const match = userText.match(pattern);
+    if (match) {
+      leadInfo.tour_time = match[1];
+      break;
+    }
   }
 
   // Extract move-in date (different from tour date)
