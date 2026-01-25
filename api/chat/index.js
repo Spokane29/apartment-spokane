@@ -365,13 +365,14 @@ function extractLeadInfo(messages) {
     if (!leadInfo.first_name) {
       // ALWAYS try explicit "my name is" pattern first - this is unambiguous
       // Do this BEFORE checking for email presence
-      const explicitNameMatch = msg.match(/(?:my name is|name is|call me|i'm|i am|this is)\s*,?\s*([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i);
+      // Use [a-z] with i flag to match both upper and lowercase (Deepgram often returns lowercase)
+      const explicitNameMatch = msg.match(/(?:my name is|name is|call me|i'm|i am|this is)\s*,?\s*([a-z]+(?:\s+[a-z]+)?)/i);
       if (explicitNameMatch) {
         const name = explicitNameMatch[1].split(' ')[0];
-        if (!notNames.includes(name.toLowerCase())) {
+        if (!notNames.includes(name.toLowerCase()) && name.length > 1) {
           leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
           const parts = explicitNameMatch[1].split(' ');
-          if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase())) {
+          if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase()) && parts[1].length > 1) {
             leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
           }
           continue; // Found name, move to next message
@@ -381,11 +382,11 @@ function extractLeadInfo(messages) {
       // For other patterns, skip if message contains an email (to avoid extracting email username as name)
       const msgContainsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(msg);
       if (!msgContainsEmail) {
-        // Try other patterns for standalone name responses
+        // Try other patterns for standalone name responses (case-insensitive for voice input)
         const namePatterns = [
-          /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
-          /name[:\s]+([A-Z][a-z]+)/i,
-          /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
+          /^([a-z]+(?:\s+[a-z]+)?)$/im,
+          /name[:\s]+([a-z]+)/i,
+          /^([a-z]+\s+[a-z]+)$/im
         ];
         for (const pattern of namePatterns) {
           const match = msg.match(pattern);
