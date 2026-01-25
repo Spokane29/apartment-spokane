@@ -359,31 +359,30 @@ function extractLeadInfo(messages) {
   const notNames = ['interested', 'looking', 'wondering', 'calling', 'texting', 'asking', 'inquiring', 'here', 'ready', 'available', 'free', 'busy', 'good', 'great', 'fine', 'okay', 'sure', 'yes', 'no', 'maybe', 'the', 'this', 'that', 'what', 'when', 'where', 'how', 'why', 'who'];
 
   // Process each message individually for name extraction
-  // This prevents email in later messages from blocking name extraction from earlier messages
+  // Voice users often give name, email, and phone all in one message
   for (const msg of userMessages) {
     // Only try to extract name if we don't have one yet
     if (!leadInfo.first_name) {
-      // Skip name extraction only if THIS message contains an email
-      const msgContainsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(msg);
-
-      if (!msgContainsEmail) {
-        // Prioritize explicit "my name is" pattern first
-        const explicitNameMatch = msg.match(/(?:my name is|name is|call me)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i);
-        if (explicitNameMatch) {
-          const name = explicitNameMatch[1].split(' ')[0];
-          if (!notNames.includes(name.toLowerCase())) {
-            leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-            const parts = explicitNameMatch[1].split(' ');
-            if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase())) {
-              leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
-            }
-            continue;
+      // ALWAYS try explicit "my name is" pattern first - this is unambiguous
+      // Do this BEFORE checking for email presence
+      const explicitNameMatch = msg.match(/(?:my name is|name is|call me|i'm|i am|this is)\s*,?\s*([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i);
+      if (explicitNameMatch) {
+        const name = explicitNameMatch[1].split(' ')[0];
+        if (!notNames.includes(name.toLowerCase())) {
+          leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+          const parts = explicitNameMatch[1].split(' ');
+          if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase())) {
+            leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
           }
+          continue; // Found name, move to next message
         }
+      }
 
-        // Then try other patterns
+      // For other patterns, skip if message contains an email (to avoid extracting email username as name)
+      const msgContainsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(msg);
+      if (!msgContainsEmail) {
+        // Try other patterns for standalone name responses
         const namePatterns = [
-          /(?:I'm|I am|this is|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
           /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
           /name[:\s]+([A-Z][a-z]+)/i,
           /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
@@ -409,9 +408,9 @@ function extractLeadInfo(messages) {
   // For other fields, join all messages (they don't have the same issue)
   const userText = userMessages.join(' ');
 
-  // Extract phone number
-  const phoneMatch = userText.match(/\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})\b/);
-  if (phoneMatch) leadInfo.phone = phoneMatch[1].replace(/[-.\s]/g, '');
+  // Extract phone number - handle formats like (818) 888-8816, 818-888-8816, 8188888816
+  const phoneMatch = userText.match(/\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})/);
+  if (phoneMatch) leadInfo.phone = phoneMatch[1] + phoneMatch[2] + phoneMatch[3];
 
   // Extract email - be more permissive
   const emailMatch = userText.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
