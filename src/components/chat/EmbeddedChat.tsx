@@ -63,12 +63,17 @@ export default function EmbeddedChat() {
     }
   }
 
-  // Play audio from base64 data - simpler approach for mobile
+  // Play audio from base64 data
   const playAudio = async (base64Audio: string) => {
     console.log('playAudio called, audio length:', base64Audio.length)
     try {
-      // Always create a fresh Audio element for mobile compatibility
-      const audio = new Audio()
+      // Use the pre-warmed audio element if available, otherwise create new
+      const audio = audioRef.current || new Audio()
+
+      // Set attributes for mobile compatibility
+      audio.setAttribute('playsinline', 'true')
+      audio.setAttribute('webkit-playsinline', 'true')
+
       audio.src = `data:audio/mpeg;base64,${base64Audio}`
       audio.volume = 1.0
 
@@ -80,12 +85,11 @@ export default function EmbeddedChat() {
         console.error('Audio error:', e)
         setIsSpeaking(false)
       }
-      audio.oncanplaythrough = () => {
-        console.log('Audio can play through')
-      }
 
       audioRef.current = audio
 
+      // Load then play
+      audio.load()
       const playPromise = audio.play()
       if (playPromise !== undefined) {
         playPromise
@@ -98,6 +102,24 @@ export default function EmbeddedChat() {
     } catch (err) {
       console.error('Audio play failed:', err)
       setIsSpeaking(false)
+    }
+  }
+
+  // Pre-warm the audio element during user gesture (for iOS/mobile)
+  const warmUpAudio = () => {
+    if (!audioRef.current) {
+      const audio = new Audio()
+      audio.setAttribute('playsinline', 'true')
+      audio.setAttribute('webkit-playsinline', 'true')
+      // Play silent audio to unlock
+      audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+      audio.volume = 0.01
+      audio.play().then(() => {
+        console.log('Audio warmed up')
+        audio.pause()
+        audio.volume = 1.0
+        audioRef.current = audio
+      }).catch(e => console.log('Warm up failed:', e))
     }
   }
 
@@ -185,6 +207,9 @@ export default function EmbeddedChat() {
   // Start recording audio with silence detection
   const startRecording = async () => {
     try {
+      // Warm up audio element during user gesture (required for iOS/mobile)
+      warmUpAudio()
+
       // Stop any playing audio first
       stopSpeaking()
 
