@@ -63,39 +63,61 @@ export default function EmbeddedChat() {
     }
   }
 
+  // Convert base64 to Blob URL (works better on mobile)
+  const base64ToBlob = (base64: string, mimeType: string): string => {
+    const byteCharacters = atob(base64)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    const byteArray = new Uint8Array(byteNumbers)
+    const blob = new Blob([byteArray], { type: mimeType })
+    return URL.createObjectURL(blob)
+  }
+
   // Play audio from base64 data
   const playAudio = async (base64Audio: string) => {
     console.log('playAudio called, audio length:', base64Audio.length)
     try {
-      // Use the pre-warmed audio element if available, otherwise create new
-      const audio = audioRef.current || new Audio()
+      // Convert base64 to blob URL (better mobile support)
+      const blobUrl = base64ToBlob(base64Audio, 'audio/mpeg')
+      console.log('Created blob URL:', blobUrl)
 
-      // Set attributes for mobile compatibility
+      // Create fresh audio element
+      const audio = new Audio()
       audio.setAttribute('playsinline', 'true')
       audio.setAttribute('webkit-playsinline', 'true')
-
-      audio.src = `data:audio/mpeg;base64,${base64Audio}`
-      audio.volume = 1.0
+      audio.preload = 'auto'
+      audio.src = blobUrl
 
       audio.onended = () => {
         console.log('Audio playback ended')
+        URL.revokeObjectURL(blobUrl)
         setIsSpeaking(false)
       }
       audio.onerror = (e) => {
         console.error('Audio error:', e)
+        URL.revokeObjectURL(blobUrl)
         setIsSpeaking(false)
+      }
+      audio.onloadeddata = () => {
+        console.log('Audio loaded, duration:', audio.duration)
       }
 
       audioRef.current = audio
 
-      // Load then play
+      // Wait for load then play
       audio.load()
+
+      await new Promise(resolve => setTimeout(resolve, 100))
+
       const playPromise = audio.play()
       if (playPromise !== undefined) {
         playPromise
           .then(() => console.log('Audio playing successfully'))
           .catch(err => {
-            console.error('Audio play rejected:', err)
+            console.error('Audio play rejected:', err.message)
+            URL.revokeObjectURL(blobUrl)
             setIsSpeaking(false)
           })
       }
@@ -105,21 +127,26 @@ export default function EmbeddedChat() {
     }
   }
 
-  // Pre-warm the audio element during user gesture (for iOS/mobile)
+  // Pre-warm audio context during user gesture (for iOS/mobile)
   const warmUpAudio = () => {
-    if (!audioRef.current) {
-      const audio = new Audio()
-      audio.setAttribute('playsinline', 'true')
-      audio.setAttribute('webkit-playsinline', 'true')
-      // Play silent audio to unlock
-      audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
-      audio.volume = 0.01
-      audio.play().then(() => {
-        console.log('Audio warmed up')
-        audio.pause()
-        audio.volume = 1.0
-        audioRef.current = audio
-      }).catch(e => console.log('Warm up failed:', e))
+    try {
+      // Create and resume AudioContext to unlock audio on iOS
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+      if (AudioContext) {
+        const ctx = new AudioContext()
+        ctx.resume().then(() => {
+          console.log('AudioContext resumed')
+          // Create a short silent buffer and play it
+          const buffer = ctx.createBuffer(1, 1, 22050)
+          const source = ctx.createBufferSource()
+          source.buffer = buffer
+          source.connect(ctx.destination)
+          source.start(0)
+          console.log('Audio warmed up via AudioContext')
+        })
+      }
+    } catch (e) {
+      console.log('Warm up error:', e)
     }
   }
 
