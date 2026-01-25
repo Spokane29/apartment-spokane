@@ -346,38 +346,43 @@ ${customRules ? `\nCustom rules:\n${customRules}` : ''}`;
 }
 
 function extractLeadInfo(messages) {
-  const userText = messages.filter((m) => m.role === 'user').map((m) => m.content).join(' ');
   const leadInfo = {};
+  const userMessages = messages.filter((m) => m.role === 'user').map((m) => m.content);
 
-  // Check if this message contains a real email - if so, don't try to extract name
-  // (prevents extracting "mccoy" from "mccoy@gmail.com" as a name)
-  // But don't match date@time like "tonight@7:00"
-  const containsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(userText);
+  // Process each message individually for name extraction
+  // This prevents email in later messages from blocking name extraction from earlier messages
+  for (const msg of userMessages) {
+    // Only try to extract name if we don't have one yet
+    if (!leadInfo.first_name) {
+      // Skip name extraction only if THIS message contains an email
+      const msgContainsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(msg);
 
-  // Extract name - multiple patterns (but NOT if message contains email)
-  if (!containsEmail) {
-    const namePatterns = [
-      /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
-      /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
-      /name[:\s]+([A-Z][a-z]+)/i,
-      // Catch simple two-word names like "Joe Schmoe" or "joe schmoe"
-      /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
-    ];
-    for (const pattern of namePatterns) {
-      const match = userText.match(pattern);
-      if (match) {
-        // Capitalize first letter of each word
-        const name = match[1].split(' ')[0];
-        leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-        // Also capture last name if present
-        const parts = match[1].split(' ');
-        if (parts.length > 1) {
-          leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+      if (!msgContainsEmail) {
+        const namePatterns = [
+          /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
+          /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
+          /name[:\s]+([A-Z][a-z]+)/i,
+          // Catch simple two-word names like "Joe Schmoe" or "joe schmoe"
+          /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
+        ];
+        for (const pattern of namePatterns) {
+          const match = msg.match(pattern);
+          if (match) {
+            const name = match[1].split(' ')[0];
+            leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+            const parts = match[1].split(' ');
+            if (parts.length > 1) {
+              leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+            }
+            break;
+          }
         }
-        break;
       }
     }
   }
+
+  // For other fields, join all messages (they don't have the same issue)
+  const userText = userMessages.join(' ');
 
   // Extract phone number
   const phoneMatch = userText.match(/\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})\b/);
@@ -388,21 +393,20 @@ function extractLeadInfo(messages) {
   if (emailMatch) {
     leadInfo.email = emailMatch[1].toLowerCase();
   } else {
-    // Also try to match something that looks like an email attempt (like "test at gmail.com" or just contains @)
     const looseEmailMatch = userText.match(/([a-zA-Z0-9._%+-]+\s*(?:@|at)\s*[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
     if (looseEmailMatch) {
       leadInfo.email = looseEmailMatch[1].replace(/\s*at\s*/i, '@').toLowerCase();
     }
   }
 
-  // Extract tour date - include "tonight" and "this evening"
+  // Extract tour date
   const datePattern = /(tonight|tomorrow|today|this evening|this afternoon|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|\d{1,2}\/\d{1,2})/i;
   const dateMatch = userText.match(datePattern);
   if (dateMatch) {
     leadInfo.tour_date = dateMatch[1];
   }
 
-  // Extract tour time separately
+  // Extract tour time
   const timePattern = /(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)|morning|afternoon|noon|evening)/i;
   const timeMatch = userText.match(timePattern);
   if (timeMatch) {
