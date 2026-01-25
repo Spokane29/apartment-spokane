@@ -187,6 +187,9 @@ async function sendToLeadsAPI(leadData) {
 }
 
 async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0, lastUserMessage = '') {
+  // Debug: log what we receive
+  console.log('buildSystemPrompt received collectedInfo:', JSON.stringify(collectedInfo));
+
   // Only fetch the 'complete' category - this is what the admin panel edits
   const { data: knowledgeBase } = await supabase
     .from('knowledge_base')
@@ -502,8 +505,11 @@ export default async function handler(req, res) {
       messageCount: session.message_count,
       collected: session.collected_info,
       hasName: !!session.collected_info.first_name,
+      hasPhone: !!session.collected_info.phone,
       hasEmail: !!session.collected_info.email
     });
+    // Log the system prompt to verify phone is marked as collected
+    console.log('SYSTEM PROMPT SNIPPET:', systemPrompt.substring(0, 1500));
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
