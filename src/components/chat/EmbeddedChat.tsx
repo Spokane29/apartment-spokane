@@ -27,6 +27,12 @@ export default function EmbeddedChat() {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hasSpokenRef = useRef(false)
+  const sessionIdRef = useRef<string | null>(null)
+
+  // Keep sessionIdRef in sync with state
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
 
   useEffect(() => {
     initChat()
@@ -108,14 +114,18 @@ export default function EmbeddedChat() {
     setInput('')
     setIsLoading(true)
 
+    // Use ref to avoid stale closure in voice callbacks
+    const currentSessionId = sessionIdRef.current
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId }),
+        body: JSON.stringify({ message: text, sessionId: currentSessionId }),
       })
       const data = await res.json()
       setSessionId(data.sessionId)
+      sessionIdRef.current = data.sessionId
       const assistantMessage = data.message
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
 
