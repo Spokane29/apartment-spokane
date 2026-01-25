@@ -232,9 +232,13 @@ Order: 1) Tour Date → 2) Tour Time → 3) Name → 4) Phone → 5) Email → 6
 - When user gives DATE AND TIME together: Ask for name
 - When user gives NAME: Say "Thanks [name]." then ask for phone
 - When user gives PHONE: Ask for email
-- When ALL collected: Give confirmation message ONLY
+- When ALL 5 items collected (all marked ✓ above): Give confirmation ONLY, do NOT ask any more questions
 
-CONFIRMATION (use when ALL 5 items collected):
+${(hasTourDate && hasTourTime && hasName && hasPhone && hasEmail) ? `
+*** ALL INFO COLLECTED - GIVE CONFIRMATION NOW ***
+Do NOT ask any more questions. Just confirm the booking:
+` : ''}
+CONFIRMATION TEMPLATE:
 "${confirmationTemplate}"
 
 === LAST USER MESSAGE ===

@@ -26,6 +26,7 @@ export default function EmbeddedChat() {
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const voiceEnabledRef = useRef(true) // Ref to avoid stale closure in callbacks
   const micStreamRef = useRef<MediaStream | null>(null) // Track mic stream to release it
+  const persistentAudioRef = useRef<HTMLAudioElement | null>(null) // Persistent audio element for iOS
 
   // Create/recreate speech recognition instance
   const createRecognition = () => {
@@ -200,14 +201,25 @@ export default function EmbeddedChat() {
   const unlockAudio = () => {
     if (audioUnlockedRef.current) return
 
-    // Create and play a silent audio to unlock iOS audio
-    const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZDAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==')
+    // Create persistent audio element for iOS
+    if (!persistentAudioRef.current) {
+      const audio = document.createElement('audio')
+      audio.setAttribute('playsinline', 'true')
+      audio.setAttribute('webkit-playsinline', 'true')
+      persistentAudioRef.current = audio
+      console.log('Created persistent audio element')
+    }
+
+    // Play silent audio to unlock
+    const silentAudio = persistentAudioRef.current
+    silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZDAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ=='
     silentAudio.volume = 0.01
+    silentAudio.load()
     silentAudio.play().then(() => {
       audioUnlockedRef.current = true
       console.log('iOS audio unlocked')
-    }).catch(() => {
-      // Ignore errors - this is just to unlock
+    }).catch((e) => {
+      console.log('Audio unlock failed:', e)
     })
   }
 
@@ -230,16 +242,23 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
-        // Use HTML5 Audio with iOS Safari compatibility
-        const audio = new Audio()
+        // Reuse persistent audio element for iOS compatibility
+        let audio = persistentAudioRef.current
+        if (!audio) {
+          audio = document.createElement('audio')
+          audio.setAttribute('playsinline', 'true')
+          audio.setAttribute('webkit-playsinline', 'true')
+          persistentAudioRef.current = audio
+        }
         audioRef.current = audio
 
-        // iOS Safari requires these attributes
-        audio.setAttribute('playsinline', 'true')
-        audio.setAttribute('webkit-playsinline', 'true')
+        // Clear previous handlers
+        audio.onended = null
+        audio.onerror = null
 
-        // Set source after attributes
+        // Set new source
         audio.src = `data:audio/mpeg;base64,${data.audio}`
+        audio.volume = 1.0
 
         audio.onended = () => {
           console.log('Audio ended, starting auto-listen')
@@ -262,7 +281,9 @@ export default function EmbeddedChat() {
 
         const playPromise = audio.play()
         if (playPromise !== undefined) {
-          playPromise.catch(err => {
+          playPromise.then(() => {
+            console.log('Audio playback started')
+          }).catch(err => {
             console.error('Audio play failed:', err)
             setIsSpeaking(false)
             setTimeout(() => {
