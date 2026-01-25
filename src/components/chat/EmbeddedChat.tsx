@@ -261,9 +261,9 @@ export default function EmbeddedChat() {
 
       console.log('Got Deepgram token, connecting...')
 
-      // Connect to Deepgram WebSocket with API key embedded as basic auth credentials
-      const wsUrl = `wss://${tokenData.key}:@api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true&smart_format=true&model=nova-2`
-      const ws = new WebSocket(wsUrl)
+      // Connect to Deepgram WebSocket using subprotocol authentication (official method for browsers)
+      const wsUrl = `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true&smart_format=true&model=nova-2`
+      const ws = new WebSocket(wsUrl, ['token', tokenData.key])
       wsRef.current = ws
 
       ws.onopen = () => {
