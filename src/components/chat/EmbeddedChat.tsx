@@ -267,6 +267,18 @@ export default function EmbeddedChat() {
       return
     }
 
+    // Request microphone permission explicitly first (helps with some browsers)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Immediately stop the stream - we just needed permission
+      stream.getTracks().forEach(track => track.stop())
+      console.log('Microphone permission granted')
+    } catch (err) {
+      console.error('Microphone permission denied:', err)
+      alert('Microphone access is required for voice input. Please allow microphone access and try again.')
+      return
+    }
+
     // Clear any existing timeout
     if (listenTimeoutRef.current) {
       clearTimeout(listenTimeoutRef.current)
@@ -281,8 +293,8 @@ export default function EmbeddedChat() {
       recognitionRef.current = null
     }
 
-    // Longer delay for mobile - give browser time to release mic
-    const delay = isAutoStart ? (retryCount === 0 ? 600 : 400) : 100
+    // Short delay to let browser release mic from getUserMedia
+    const delay = isAutoStart ? 300 : 50
 
     await new Promise(resolve => setTimeout(resolve, delay))
 
