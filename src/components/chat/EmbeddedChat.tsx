@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 import './embedded-chat.css'
 
@@ -8,9 +8,6 @@ interface Message {
   content: string
 }
 
-// Check if browser supports speech recognition
-const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
 export default function EmbeddedChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -19,68 +16,27 @@ export default function EmbeddedChat() {
   const [isListening, setIsListening] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [interimText, setInterimText] = useState('')
+
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
+  const voiceEnabledRef = useRef(true)
+  const persistentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUnlockedRef = useRef(false)
+
+  // Deepgram refs
+  const wsRef = useRef<WebSocket | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const voiceEnabledRef = useRef(true) // Ref to avoid stale closure in callbacks
-  const micStreamRef = useRef<MediaStream | null>(null) // Track mic stream to release it
-  const persistentAudioRef = useRef<HTMLAudioElement | null>(null) // Persistent audio element for iOS
-
-  // Create/recreate speech recognition instance
-  const createRecognition = () => {
-    if (!SpeechRecognition) return null
-
-    const recognition = new SpeechRecognition()
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript
-      console.log('Speech result:', transcript)
-      if (transcript.trim()) {
-        handleVoiceInput(transcript.trim())
-      }
-    }
-
-    recognition.onerror = (event: any) => {
-      // Ignore 'aborted' and 'no-speech' errors - they're expected
-      if (event.error === 'aborted' || event.error === 'no-speech') {
-        console.log('Recognition ended:', event.error)
-      } else {
-        console.error('Speech recognition error:', event.error)
-      }
-      setIsListening(false)
-    }
-
-    recognition.onend = () => {
-      console.log('Recognition onend fired')
-      setIsListening(false)
-    }
-
-    return recognition
-  }
 
   useEffect(() => {
     initChat()
-
-    // Initialize speech recognition
-    recognitionRef.current = createRecognition()
-
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort()
-        } catch (e) {
-          // Ignore
-        }
-      }
+      stopListening()
     }
   }, [])
 
-  // Keep voiceEnabledRef in sync with state (for callbacks)
   useEffect(() => {
     voiceEnabledRef.current = voiceEnabled
   }, [voiceEnabled])
@@ -100,117 +56,23 @@ export default function EmbeddedChat() {
       setMessages([{ id: Date.now(), role: 'assistant', content: data.message }])
     } catch (err) {
       console.error('Failed to init chat:', err)
-      setMessages([{ id: Date.now(), role: 'assistant', content: "Hi! I'm the virtual assistant for South Oak Apartments. How can I help you?" }])
+      setMessages([{ id: Date.now(), role: 'assistant', content: "Hi, I'm the virtual assistant for South Oak Apartments. How can I help you?" }])
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Preprocess voice input to fix common speech recognition mistakes
-  const preprocessVoiceText = (text: string): string => {
-    let result = text
-
-    // Fix spoken emails: "penny at gmail dot com" → "penny@gmail.com"
-    result = result.replace(/\s+at\s+/gi, '@')
-    result = result.replace(/\s+dot\s+/gi, '.')
-
-    // Common misheards for "at"
-    result = result.replace(/\s+add\s+/gi, '@')  // "add" sounds like "at"
-    result = result.replace(/\s+hat\s+/gi, '@')  // "hat" misheard
-
-    // Fix gmail/yahoo/hotmail variations
-    result = result.replace(/@\s*g\s*mail/gi, '@gmail')
-    result = result.replace(/@\s*gmail/gi, '@gmail')
-    result = result.replace(/@\s*yahoo/gi, '@yahoo')
-    result = result.replace(/@\s*hotmail/gi, '@hotmail')
-    result = result.replace(/@\s*outlook/gi, '@outlook')
-    result = result.replace(/@\s*icloud/gi, '@icloud')
-
-    // Fix .com variations
-    result = result.replace(/dot\s*com$/gi, '.com')
-    result = result.replace(/\.\s*com$/gi, '.com')
-    result = result.replace(/\s+calm$/gi, '.com')  // "calm" sounds like "com"
-    result = result.replace(/\s+come$/gi, '.com')  // "come" sounds like "com"
-
-    // Remove spaces around @ and .
-    result = result.replace(/\s*@\s*/g, '@')
-    result = result.replace(/(\w)\s*\.\s*(com|org|net|edu|io)$/gi, '$1.$2')
-
-    console.log('Voice preprocessed:', text, '→', result)
-    return result
-  }
-
-  const handleVoiceInput = (text: string) => {
-    console.log('handleVoiceInput:', text)
-    // Clear the auto-stop timeout since we got input
-    if (listenTimeoutRef.current) {
-      clearTimeout(listenTimeoutRef.current)
-      listenTimeoutRef.current = null
-    }
-    setIsListening(false)
-
-    // Fully cleanup recognition to prepare for next auto-listen
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort()
-      } catch (e) {
-        // Ignore
-      }
-      recognitionRef.current = null
-    }
-
-    // Release mic stream to free up hardware
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop())
-      micStreamRef.current = null
-      console.log('Released mic stream after voice input')
-    }
-
-    // Preprocess voice input to fix email formatting
-    const processedText = preprocessVoiceText(text)
-
-    // Detect incomplete email (just domain part) and add helpful context
-    if (processedText.match(/^@?\s*(gmail|yahoo|hotmail|outlook|icloud)\.(com|net|org)$/i)) {
-      // User said just the domain part - voice missed the username
-      sendMessage(processedText + " (voice may have cut off - please type full email)")
-    } else {
-      sendMessage(processedText)
-    }
-  }
-
-  // Track if audio has been unlocked on iOS
-  const audioUnlockedRef = useRef(false)
-
-  // Initialize AudioContext on user gesture (required for mobile)
-  const initAudioContext = () => {
-    if (audioContextRef.current) return audioContextRef.current
-
-    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext
-    if (AudioContextClass) {
-      audioContextRef.current = new AudioContextClass()
-      // Resume if suspended
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume()
-      }
-      console.log('AudioContext initialized')
-    }
-    return audioContextRef.current
-  }
-
-  // Unlock audio playback on iOS (must be called during user gesture)
+  // Unlock audio playback on iOS
   const unlockAudio = () => {
     if (audioUnlockedRef.current) return
 
-    // Create persistent audio element for iOS
     if (!persistentAudioRef.current) {
       const audio = document.createElement('audio')
       audio.setAttribute('playsinline', 'true')
       audio.setAttribute('webkit-playsinline', 'true')
       persistentAudioRef.current = audio
-      console.log('Created persistent audio element')
     }
 
-    // Play silent audio to unlock
     const silentAudio = persistentAudioRef.current
     silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+xBkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZDAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ=='
     silentAudio.volume = 0.01
@@ -218,10 +80,17 @@ export default function EmbeddedChat() {
     silentAudio.play().then(() => {
       audioUnlockedRef.current = true
       console.log('iOS audio unlocked')
-    }).catch((e) => {
-      console.log('Audio unlock failed:', e)
-    })
+    }).catch(() => {})
   }
+
+  const handleVoiceInput = useCallback((text: string) => {
+    console.log('Deepgram result:', text)
+    if (!text.trim()) return
+
+    setInterimText('')
+    stopListening()
+    sendMessage(text.trim())
+  }, [])
 
   const speakText = async (text: string) => {
     if (!voiceEnabledRef.current) return
@@ -242,7 +111,6 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
-        // Reuse persistent audio element for iOS compatibility
         let audio = persistentAudioRef.current
         if (!audio) {
           audio = document.createElement('audio')
@@ -252,11 +120,9 @@ export default function EmbeddedChat() {
         }
         audioRef.current = audio
 
-        // Clear previous handlers
         audio.onended = null
         audio.onerror = null
 
-        // Set new source
         audio.src = `data:audio/mpeg;base64,${data.audio}`
         audio.volume = 1.0
 
@@ -264,41 +130,36 @@ export default function EmbeddedChat() {
           console.log('Audio ended, starting auto-listen')
           setIsSpeaking(false)
           setTimeout(() => {
-            autoStartListening()
-          }, 200)
+            if (voiceEnabledRef.current) {
+              startListening(true)
+            }
+          }, 300)
         }
 
-        audio.onerror = (e) => {
-          console.error('Audio playback error:', e)
+        audio.onerror = () => {
+          console.error('Audio playback error')
           setIsSpeaking(false)
           setTimeout(() => {
-            autoStartListening()
-          }, 200)
+            if (voiceEnabledRef.current) {
+              startListening(true)
+            }
+          }, 300)
         }
 
-        // iOS Safari needs load() before play()
         audio.load()
-
-        const playPromise = audio.play()
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            console.log('Audio playback started')
-          }).catch(err => {
-            console.error('Audio play failed:', err)
-            setIsSpeaking(false)
-            setTimeout(() => {
-              autoStartListening()
-            }, 200)
-          })
-        }
-      } else {
-        console.log('No audio data received')
-        setIsSpeaking(false)
-        // Still try to auto-listen if voice enabled
-        if (voiceEnabledRef.current) {
+        audio.play().catch(err => {
+          console.error('Audio play failed:', err)
+          setIsSpeaking(false)
           setTimeout(() => {
-            autoStartListening()
-          }, 200)
+            if (voiceEnabledRef.current) {
+              startListening(true)
+            }
+          }, 300)
+        })
+      } else {
+        setIsSpeaking(false)
+        if (voiceEnabledRef.current) {
+          setTimeout(() => startListening(true), 300)
         }
       }
     } catch (err) {
@@ -319,8 +180,6 @@ export default function EmbeddedChat() {
     const text = messageText || input.trim()
     if (!text || isLoading) return
 
-    // Initialize AudioContext and unlock audio on user interaction (needed for mobile/iOS)
-    initAudioContext()
     unlockAudio()
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
@@ -339,7 +198,6 @@ export default function EmbeddedChat() {
       const assistantMessage = data.message
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
 
-      // Speak the response if voice is enabled
       if (voiceEnabled && assistantMessage) {
         speakText(assistantMessage)
       }
@@ -351,54 +209,124 @@ export default function EmbeddedChat() {
     }
   }
 
-  const startListening = async () => {
-    // Initialize AudioContext and unlock audio on user interaction (needed for mobile/iOS)
-    initAudioContext()
+  // Start Deepgram listening
+  const startListening = async (isAutoStart = false) => {
     unlockAudio()
-
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome.')
-      return
-    }
-
-    // Create fresh recognition instance if needed
-    if (!recognitionRef.current) {
-      console.log('Creating recognition for manual start')
-      recognitionRef.current = createRecognition()
-    }
-
-    if (!recognitionRef.current) {
-      alert('Speech recognition failed to initialize')
-      return
-    }
-
-    // Request microphone permission first
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true })
-    } catch (err) {
-      alert('Microphone access denied. Please allow microphone access to use voice input.')
-      return
-    }
-
     stopSpeaking()
 
+    // Stop any existing connection
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+
     try {
-      recognitionRef.current.start()
-      setIsListening(true)
-    } catch (err: any) {
-      console.error('Failed to start listening:', err)
-      // Try with fresh instance
-      console.log('Retrying with fresh recognition...')
-      recognitionRef.current = createRecognition()
-      if (recognitionRef.current) {
+      // Get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000
+        }
+      })
+      streamRef.current = stream
+
+      // Get Deepgram API key from server
+      const tokenRes = await fetch('/api/voice/deepgram-token')
+      const tokenData = await tokenRes.json()
+
+      if (!tokenData.key) {
+        console.error('No Deepgram key')
+        alert('Voice recognition not available')
+        return
+      }
+
+      // Connect to Deepgram WebSocket
+      const wsUrl = `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true&smart_format=true&model=nova-2`
+      const ws = new WebSocket(wsUrl, ['token', tokenData.key])
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log('Deepgram connected')
+        setIsListening(true)
+        setInterimText('')
+
+        // Create MediaRecorder to capture audio
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus'
+        })
+        mediaRecorderRef.current = mediaRecorder
+
+        // Use AudioContext to get raw PCM data for Deepgram
+        const audioContext = new AudioContext({ sampleRate: 16000 })
+        const source = audioContext.createMediaStreamSource(stream)
+        const processor = audioContext.createScriptProcessor(4096, 1, 1)
+
+        processor.onaudioprocess = (e) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            const inputData = e.inputBuffer.getChannelData(0)
+            // Convert float32 to int16
+            const int16Data = new Int16Array(inputData.length)
+            for (let i = 0; i < inputData.length; i++) {
+              int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768))
+            }
+            ws.send(int16Data.buffer)
+          }
+        }
+
+        source.connect(processor)
+        processor.connect(audioContext.destination)
+
+        // Auto-stop after 8 seconds for auto-start, or 30 seconds for manual
+        const timeout = isAutoStart ? 8000 : 30000
+        listenTimeoutRef.current = setTimeout(() => {
+          console.log('Listen timeout')
+          stopListening()
+        }, timeout)
+      }
+
+      ws.onmessage = (event) => {
         try {
-          recognitionRef.current.start()
-          setIsListening(true)
-        } catch (retryErr: any) {
-          alert('Failed to start speech recognition: ' + retryErr.message)
-          setIsListening(false)
+          const data = JSON.parse(event.data)
+          if (data.channel?.alternatives?.[0]?.transcript) {
+            const transcript = data.channel.alternatives[0].transcript
+
+            if (data.is_final && transcript.trim()) {
+              console.log('Final transcript:', transcript)
+              handleVoiceInput(transcript)
+            } else if (transcript.trim()) {
+              setInterimText(transcript)
+            }
+          }
+        } catch (e) {
+          console.error('Parse error:', e)
         }
       }
+
+      ws.onerror = (err) => {
+        console.error('Deepgram error:', err)
+        stopListening()
+      }
+
+      ws.onclose = () => {
+        console.log('Deepgram disconnected')
+        setIsListening(false)
+      }
+
+    } catch (err: any) {
+      console.error('Failed to start listening:', err)
+      if (err.name === 'NotAllowedError') {
+        alert('Microphone access denied. Please allow microphone access to use voice input.')
+      }
+      setIsListening(false)
     }
   }
 
@@ -407,110 +335,26 @@ export default function EmbeddedChat() {
       clearTimeout(listenTimeoutRef.current)
       listenTimeoutRef.current = null
     }
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop()
-      } catch (e) {
-        // Ignore
-      }
+
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
     }
+
+    if (mediaRecorderRef.current) {
+      try {
+        mediaRecorderRef.current.stop()
+      } catch (e) {}
+      mediaRecorderRef.current = null
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+
     setIsListening(false)
-  }
-
-  // Auto-start listening after AI speaks (with 5 second timeout)
-  const autoStartListening = async (retryCount = 0) => {
-    // Use ref to get current value (avoid stale closure)
-    const isVoiceEnabled = voiceEnabledRef.current
-    console.log('autoStartListening called, voiceEnabled:', isVoiceEnabled, 'retry:', retryCount)
-
-    if (!SpeechRecognition) {
-      console.log('No SpeechRecognition support')
-      return
-    }
-    if (!isVoiceEnabled) {
-      console.log('Voice disabled, skipping auto-listen')
-      return
-    }
-
-    // Clear any existing timeout
-    if (listenTimeoutRef.current) {
-      clearTimeout(listenTimeoutRef.current)
-      listenTimeoutRef.current = null
-    }
-
-    // Stop any existing recognition first
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort()
-      } catch (e) {
-        // Ignore
-      }
-      recognitionRef.current = null
-    }
-
-    // Release previous mic stream completely before requesting new one
-    if (micStreamRef.current) {
-      console.log('Releasing previous mic stream...')
-      micStreamRef.current.getTracks().forEach(track => {
-        track.stop()
-        console.log('Stopped track:', track.kind)
-      })
-      micStreamRef.current = null
-    }
-
-    // Re-request mic permission to ensure we still have access (mobile can revoke)
-    try {
-      console.log('Re-requesting mic permission...')
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      micStreamRef.current = stream // Store so we can release it next time
-      console.log('Mic permission confirmed, stream active')
-    } catch (err) {
-      console.error('Mic permission lost:', err)
-      return
-    }
-
-    // Longer delay for mobile - give browser time to fully release mic
-    const delay = retryCount === 0 ? 600 : 400
-    console.log('Waiting', delay, 'ms before starting recognition')
-
-    setTimeout(() => {
-      // ALWAYS create fresh recognition instance for mobile reliability
-      console.log('Creating fresh recognition instance')
-      recognitionRef.current = createRecognition()
-
-      if (!recognitionRef.current) {
-        console.log('Failed to create recognition')
-        return
-      }
-
-      try {
-        recognitionRef.current.start()
-        setIsListening(true)
-        console.log('Auto-listening started successfully')
-
-        // Auto-stop after 5 seconds if no speech detected
-        listenTimeoutRef.current = setTimeout(() => {
-          console.log('Auto-listen timeout - stopping')
-          setIsListening(false)
-          if (recognitionRef.current) {
-            try {
-              recognitionRef.current.stop()
-            } catch (e) {
-              // Ignore
-            }
-          }
-        }, 5000)
-      } catch (err: any) {
-        console.error('Failed to auto-start listening:', err.message)
-        setIsListening(false)
-
-        // Retry up to 2 times with fresh recognition instance
-        if (retryCount < 2) {
-          console.log('Retrying with fresh recognition... attempt', retryCount + 1)
-          setTimeout(() => autoStartListening(retryCount + 1), 700)
-        }
-      }
-    }, delay)
+    setInterimText('')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -527,8 +371,7 @@ export default function EmbeddedChat() {
           type="button"
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
           onClick={() => {
-            initAudioContext()
-            unlockAudio() // Unlock iOS audio on user gesture
+            unlockAudio()
             setVoiceEnabled(!voiceEnabled)
             if (voiceEnabled) stopSpeaking()
           }}
@@ -561,6 +404,11 @@ export default function EmbeddedChat() {
             <Volume2 size={14} className="pulse" /> Speaking...
           </div>
         )}
+        {interimText && (
+          <div className="interim-text">
+            <Mic size={14} /> {interimText}...
+          </div>
+        )}
       </div>
 
       <form className="embedded-chat-input" onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
@@ -568,7 +416,7 @@ export default function EmbeddedChat() {
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
           onClick={() => isListening ? stopListening() : startListening()}
-          disabled={isLoading}
+          disabled={isLoading || isSpeaking}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>

@@ -244,3 +244,17 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+.interim-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f9ff;
+  color: #0369a1;
+  border-radius: 12px;
+  font-size: 12px;
+  font-style: italic;
+  margin-top: 8px;
+  align-self: flex-end;
+}
