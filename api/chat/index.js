@@ -380,6 +380,7 @@ function extractLeadInfo(messages) {
 
   // Extract phone number
   const phoneMatch = userText.match(/\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})\b/);
+  console.log('Phone regex test on:', userText, '→ match:', phoneMatch);
   if (phoneMatch) leadInfo.phone = phoneMatch[1].replace(/[-.\s]/g, '');
 
   // Extract email - be more permissive
