@@ -475,17 +475,16 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
+            console.log('Mic button clicked, isListening:', isListening)
             if (isListening) {
               stopListening()
-              // Refocus input after stopping
-              setTimeout(() => inputRef.current?.focus(), 0)
             } else {
               startListening()
             }
           }}
           disabled={isLoading || isSpeaking}
-          tabIndex={-1}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
@@ -495,7 +494,7 @@ export default function EmbeddedChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? 'Listening...' : 'Type a message...'}
+          placeholder="Type a message..."
           disabled={isLoading}
         />
         <button type="submit" disabled={isLoading || !input.trim()}>
