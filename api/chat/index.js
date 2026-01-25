@@ -528,7 +528,8 @@ export default async function handler(req, res) {
 
     // Save lead to Supabase
     if (hasMinimumInfo && !session.lead_id) {
-      const { data: lead } = await supabase.from('leads').insert([{
+      console.log('Saving NEW lead to Supabase:', info.first_name, info.phone);
+      const { data: lead, error: insertError } = await supabase.from('leads').insert([{
         first_name: info.first_name,
         last_name: info.last_name || '',
         phone: info.phone,
@@ -538,9 +539,15 @@ export default async function handler(req, res) {
         source: 'website-chat',
         property_interest: 'South Oak Apartment',
       }]).select().single();
-      if (lead) session.lead_id = lead.id;
+      if (insertError) {
+        console.error('Lead INSERT error:', insertError.message);
+      } else if (lead) {
+        console.log('Lead saved with ID:', lead.id);
+        session.lead_id = lead.id;
+      }
     } else if (session.lead_id) {
-      await supabase.from('leads').update({
+      console.log('Updating existing lead:', session.lead_id);
+      const { error: updateError } = await supabase.from('leads').update({
         first_name: info.first_name,
         last_name: info.last_name || '',
         phone: info.phone,
@@ -548,11 +555,20 @@ export default async function handler(req, res) {
         move_in_date: info.tour_date || '',
         chat_transcript: session.messages
       }).eq('id', session.lead_id);
+      if (updateError) {
+        console.error('Lead UPDATE error:', updateError.message);
+      }
     }
 
     // Send to LeasingVoice API - wait until we have ALL required info (name, phone, email)
     // This ensures the lead has complete contact info before being sent
     const hasCompleteInfo = info.first_name && info.phone && info.email;
+    console.log('Lead status check:', {
+      hasMinimumInfo,
+      hasCompleteInfo,
+      lead_sent_to_leasingvoice: session.lead_sent_to_leasingvoice,
+      info
+    });
     if (hasCompleteInfo && !session.lead_sent_to_leasingvoice) {
       console.log('Sending complete lead to LeasingVoice:', info);
       const result = await sendToLeadsAPI({
