@@ -293,6 +293,9 @@ YOUR SINGLE TASK: ${nextAction}
 # ABSOLUTE RULES - VIOLATION = FAILURE
 ##########################################################
 
+${hasTourTime ? `TOUR TIME IS ALREADY COLLECTED (${collectedInfo.tour_time}).
+DO NOT ask for time. DO NOT ask "what time". The tour time is already set.` : ''}
+
 ${hasPhone ? `PHONE IS ALREADY COLLECTED (${collectedInfo.phone}).
 DO NOT ask for phone. DO NOT mention needing phone. DO NOT say "I need your phone".
 The phone number ${collectedInfo.phone} is already saved.` : ''}
@@ -336,6 +339,9 @@ YOUR TASK: ${nextAction}
 ##########################################################
 # ABSOLUTE RULES
 ##########################################################
+
+${hasTourTime ? `TOUR TIME ALREADY COLLECTED: ${collectedInfo.tour_time}
+DO NOT ask for time again.` : ''}
 
 ${hasPhone ? `PHONE ALREADY COLLECTED: ${collectedInfo.phone}
 DO NOT ask for phone again. DO NOT say "I need your phone".` : ''}
