@@ -8,6 +8,50 @@ interface Message {
   content: string
 }
 
+// Web Speech API types
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList
+  resultIndex: number
+}
+
+interface SpeechRecognitionResultList {
+  length: number
+  item(index: number): SpeechRecognitionResult
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean
+  length: number
+  item(index: number): SpeechRecognitionAlternative
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: { error: string }) => void) | null
+  onend: (() => void) | null
+  onstart: (() => void) | null
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
+  }
+}
+
 export default function EmbeddedChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -23,13 +67,8 @@ export default function EmbeddedChat() {
   const voiceEnabledRef = useRef(true)
   const persistentAudioRef = useRef<HTMLAudioElement | null>(null)
   const audioUnlockedRef = useRef(false)
-
-  // Deepgram refs
-  const wsRef = useRef<WebSocket | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
 
   useEffect(() => {
     initChat()
@@ -85,7 +124,7 @@ export default function EmbeddedChat() {
   }
 
   const handleVoiceInput = useCallback((text: string) => {
-    console.log('Deepgram result:', text)
+    console.log('Voice result:', text)
     if (!text.trim()) return
 
     setInterimText('')
@@ -210,134 +249,89 @@ export default function EmbeddedChat() {
     }
   }
 
-  // Start Deepgram listening
-  const startListening = async (isAutoStart = false) => {
+  // Start Web Speech API listening
+  const startListening = (isAutoStart = false) => {
     unlockAudio()
     stopSpeaking()
 
-    // Stop any existing connection
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
+    // Check if Web Speech API is available
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('Voice recognition is not supported in this browser. Please use Chrome, Safari, or Edge.')
+      return
     }
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop()
-      mediaRecorderRef.current = null
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
+
+    // Stop existing recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort()
+      } catch (e) {}
+      recognitionRef.current = null
     }
 
     try {
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000
-        }
-      })
-      streamRef.current = stream
+      const recognition = new SpeechRecognition()
+      recognitionRef.current = recognition
 
-      // Get Deepgram API key from server
-      const tokenRes = await fetch('/api/voice/deepgram-token')
-      if (!tokenRes.ok) {
-        console.error('Failed to get Deepgram token:', tokenRes.status)
-        alert('Voice recognition not available. Please try again.')
-        streamRef.current?.getTracks().forEach(t => t.stop())
-        streamRef.current = null
-        return
-      }
-      const tokenData = await tokenRes.json()
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.lang = 'en-US'
 
-      if (!tokenData.key) {
-        console.error('No Deepgram key in response')
-        alert('Voice recognition not configured')
-        streamRef.current?.getTracks().forEach(t => t.stop())
-        streamRef.current = null
-        return
-      }
-
-      console.log('Got Deepgram token, connecting...')
-
-      // Connect to Deepgram WebSocket using subprotocol authentication (official method for browsers)
-      const wsUrl = `wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true&smart_format=true&model=nova-2`
-      const ws = new WebSocket(wsUrl, ['token', tokenData.key])
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        console.log('Deepgram connected')
+      recognition.onstart = () => {
+        console.log('Speech recognition started')
         setIsListening(true)
         setInterimText('')
+      }
 
-        // Use AudioContext to get raw PCM data for Deepgram
-        const audioContext = new AudioContext({ sampleRate: 16000 })
-        audioContextRef.current = audioContext
-        const source = audioContext.createMediaStreamSource(stream)
-        const processor = audioContext.createScriptProcessor(4096, 1, 1)
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = ''
+        let interimTranscript = ''
 
-        processor.onaudioprocess = (e) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            const inputData = e.inputBuffer.getChannelData(0)
-            // Convert float32 to int16
-            const int16Data = new Int16Array(inputData.length)
-            for (let i = 0; i < inputData.length; i++) {
-              int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768))
-            }
-            ws.send(int16Data.buffer)
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript
+          } else {
+            interimTranscript += result[0].transcript
           }
         }
 
-        source.connect(processor)
-        processor.connect(audioContext.destination)
+        if (interimTranscript) {
+          setInterimText(interimTranscript)
+        }
 
-        // Auto-stop after 10 seconds for auto-start, or 30 seconds for manual
-        const timeout = isAutoStart ? 10000 : 30000
-        listenTimeoutRef.current = setTimeout(() => {
-          console.log('Listen timeout')
-          stopListening()
-        }, timeout)
-      }
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          if (data.channel?.alternatives?.[0]?.transcript) {
-            const transcript = data.channel.alternatives[0].transcript
-
-            if (data.is_final && transcript.trim()) {
-              console.log('Final transcript:', transcript)
-              handleVoiceInput(transcript)
-            } else if (transcript.trim()) {
-              setInterimText(transcript)
-            }
-          }
-        } catch (e) {
-          console.error('Parse error:', e)
+        if (finalTranscript) {
+          console.log('Final transcript:', finalTranscript)
+          handleVoiceInput(finalTranscript)
         }
       }
 
-      ws.onerror = (err) => {
-        console.error('Deepgram WebSocket error:', err)
-        alert('Voice connection failed. Please try again.')
-        stopListening()
-      }
-
-      ws.onclose = (event) => {
-        console.log('Deepgram disconnected, code:', event.code, 'reason:', event.reason)
-        if (event.code !== 1000 && event.code !== 1005) {
-          // Abnormal close - might be auth issue
-          console.error('WebSocket closed abnormally')
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        if (event.error !== 'aborted' && event.error !== 'no-speech') {
+          // Don't show alert for common non-errors
         }
         setIsListening(false)
+        setInterimText('')
       }
 
-    } catch (err: any) {
-      console.error('Failed to start listening:', err)
-      if (err.name === 'NotAllowedError') {
-        alert('Microphone access denied. Please allow microphone access to use voice input.')
+      recognition.onend = () => {
+        console.log('Speech recognition ended')
+        setIsListening(false)
+        setInterimText('')
       }
+
+      recognition.start()
+
+      // Auto-stop after timeout
+      const timeout = isAutoStart ? 10000 : 30000
+      listenTimeoutRef.current = setTimeout(() => {
+        console.log('Listen timeout')
+        stopListening()
+      }, timeout)
+
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err)
       setIsListening(false)
     }
   }
@@ -348,30 +342,11 @@ export default function EmbeddedChat() {
       listenTimeoutRef.current = null
     }
 
-    if (wsRef.current) {
+    if (recognitionRef.current) {
       try {
-        wsRef.current.close()
+        recognitionRef.current.abort()
       } catch (e) {}
-      wsRef.current = null
-    }
-
-    if (audioContextRef.current) {
-      try {
-        audioContextRef.current.close()
-      } catch (e) {}
-      audioContextRef.current = null
-    }
-
-    if (mediaRecorderRef.current) {
-      try {
-        mediaRecorderRef.current.stop()
-      } catch (e) {}
-      mediaRecorderRef.current = null
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
+      recognitionRef.current = null
     }
 
     setIsListening(false)
