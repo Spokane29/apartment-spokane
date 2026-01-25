@@ -225,7 +225,9 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0,
 
   if (hasTourDate || hasTourTime) {
     conversationState = 'SCHEDULING_TOUR';
-    if (!hasTourTime) {
+    if (!hasMoveInDate) {
+      nextAction = 'Ask "When are you planning to move?"';
+    } else if (!hasTourTime) {
       nextAction = 'Ask what TIME works for their tour';
     } else if (!hasName) {
       nextAction = 'Ask for their NAME to complete booking';
@@ -233,8 +235,6 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0,
       nextAction = 'Ask for their PHONE NUMBER';
     } else if (!hasEmail) {
       nextAction = 'Ask for their EMAIL';
-    } else if (!hasMoveInDate) {
-      nextAction = 'Ask when they are planning to MOVE IN (what month/timeframe)';
     } else {
       nextAction = 'Give the confirmation message - all info collected';
     }
@@ -275,12 +275,12 @@ ${hasTourTime ? `- Tour Time: ${collectedInfo.tour_time} ✓ HAVE IT` : ''}
 ${hasMoveInDate ? `- Move-in Date: ${collectedInfo.move_in_date} ✓ HAVE IT` : ''}
 
 STILL NEED TO COLLECT:
-${!hasName && (hasTourDate || hasTourTime) ? '- Name (ask for this next)' : ''}
+${!hasTourDate ? '- Tour Date' : ''}
+${!hasMoveInDate && hasTourDate ? '- Move-in Date (ask "When are you planning to move?")' : ''}
+${!hasTourTime && hasMoveInDate ? '- Tour Time' : ''}
+${!hasName && hasTourTime ? '- Name (ask for this next)' : ''}
 ${!hasPhone && hasName ? '- Phone (ask for this next)' : ''}
 ${!hasEmail && hasPhone ? '- Email (ask for this next)' : ''}
-${!hasMoveInDate && hasEmail ? '- Move-in Date (ask "When are you planning to move?")' : ''}
-${!hasTourDate ? '- Tour Date' : ''}
-${!hasTourTime && hasTourDate ? '- Tour Time' : ''}
 
 ${allCollected ? `
 *** ALL INFO COLLECTED - GIVE CONFIRMATION NOW ***
