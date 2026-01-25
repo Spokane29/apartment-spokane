@@ -75,8 +75,8 @@ export default function EmbeddedChat() {
     return URL.createObjectURL(blob)
   }
 
-  // Play audio from base64 data
-  const playAudio = async (base64Audio: string) => {
+  // Play audio from base64 data - returns true if successful
+  const playAudio = async (base64Audio: string): Promise<boolean> => {
     console.log('playAudio called, audio length:', base64Audio.length)
     try {
       // Convert base64 to blob URL (better mobile support)
@@ -98,7 +98,6 @@ export default function EmbeddedChat() {
       audio.onerror = (e) => {
         console.error('Audio error:', e)
         URL.revokeObjectURL(blobUrl)
-        setIsSpeaking(false)
       }
       audio.onloadeddata = () => {
         console.log('Audio loaded, duration:', audio.duration)
@@ -108,22 +107,14 @@ export default function EmbeddedChat() {
 
       // Wait for load then play
       audio.load()
-
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      const playPromise = audio.play()
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => console.log('Audio playing successfully'))
-          .catch(err => {
-            console.error('Audio play rejected:', err.message)
-            URL.revokeObjectURL(blobUrl)
-            setIsSpeaking(false)
-          })
-      }
+      await audio.play()
+      console.log('Audio playing successfully')
+      return true
     } catch (err) {
       console.error('Audio play failed:', err)
-      setIsSpeaking(false)
+      return false
     }
   }
 
@@ -150,13 +141,28 @@ export default function EmbeddedChat() {
     }
   }
 
+  // Fallback: use browser's built-in speech synthesis
+  const speakWithBrowserTTS = (text: string) => {
+    if ('speechSynthesis' in window) {
+      console.log('Using browser TTS fallback')
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 1.0
+      utterance.pitch = 1.0
+      utterance.onend = () => setIsSpeaking(false)
+      utterance.onerror = () => setIsSpeaking(false)
+      window.speechSynthesis.speak(utterance)
+    } else {
+      setIsSpeaking(false)
+    }
+  }
+
   const speakText = async (text: string) => {
     if (!voiceEnabled) return
 
     console.log('speakText called:', text.substring(0, 50))
+    setIsSpeaking(true)
 
     try {
-      setIsSpeaking(true)
       const res = await fetch('/api/voice/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,8 +170,8 @@ export default function EmbeddedChat() {
       })
 
       if (!res.ok) {
-        console.error('Voice API error:', res.status)
-        setIsSpeaking(false)
+        console.error('Voice API error, using browser TTS')
+        speakWithBrowserTTS(text)
         return
       }
 
@@ -173,14 +179,20 @@ export default function EmbeddedChat() {
       console.log('Got audio response, has audio:', !!data.audio)
 
       if (data.audio) {
-        await playAudio(data.audio)
+        // Try ElevenLabs audio first
+        const played = await playAudio(data.audio)
+        // If play failed, fall back to browser TTS
+        if (!played) {
+          console.log('ElevenLabs failed, using browser TTS')
+          speakWithBrowserTTS(text)
+        }
       } else {
-        console.log('No audio in response')
-        setIsSpeaking(false)
+        console.log('No audio in response, using browser TTS')
+        speakWithBrowserTTS(text)
       }
     } catch (err) {
-      console.error('Failed to speak:', err)
-      setIsSpeaking(false)
+      console.error('Failed to speak, using browser TTS:', err)
+      speakWithBrowserTTS(text)
     }
   }
 
