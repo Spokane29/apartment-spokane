@@ -27,7 +27,7 @@ export default function EmbeddedChat() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const voiceEnabledRef = useRef(true)
-  const pendingTranscriptRef = useRef<string | null>(null)
+  const isListeningRef = useRef(false)
 
   // Keep refs in sync
   useEffect(() => {
@@ -146,53 +146,67 @@ export default function EmbeddedChat() {
       return
     }
 
-    if (isListening) {
+    // Use ref to check current state (avoids stale closure)
+    if (isListeningRef.current) {
       recognitionRef.current?.stop()
+      isListeningRef.current = false
       setIsListening(false)
-    } else {
-      stopSpeaking() // Stop any playing audio
+      return
+    }
 
-      // Create fresh recognition instance each time (fixes Chrome issues)
-      const recognition = new SpeechRecognition()
-      recognition.continuous = false
-      recognition.interimResults = false
-      recognition.lang = 'en-US'
+    // Stop any playing audio without triggering re-render
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
 
-      recognition.onstart = () => {
-        console.log('Speech recognition started')
-        setIsListening(true)
+    // Create fresh recognition instance each time (fixes Chrome issues)
+    const recognition = new SpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => {
+      console.log('Speech recognition started')
+      isListeningRef.current = true
+      setIsListening(true)
+    }
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      console.log('Speech result:', transcript)
+      isListeningRef.current = false
+      setIsListening(false)
+      if (transcript.trim()) {
+        handleVoiceResult(transcript.trim())
       }
+    }
 
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript
-        console.log('Speech result:', transcript)
-        setIsListening(false)
-        if (transcript.trim()) {
-          // Store transcript and process it
-          pendingTranscriptRef.current = transcript.trim()
-          handleVoiceResult(transcript.trim())
-        }
-      }
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error)
+      isListeningRef.current = false
+      setIsListening(false)
+    }
 
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error)
-        setIsListening(false)
-      }
+    recognition.onend = () => {
+      console.log('Speech recognition ended')
+      isListeningRef.current = false
+      setIsListening(false)
+    }
 
-      recognition.onend = () => {
-        console.log('Speech recognition ended')
-        setIsListening(false)
-      }
+    recognitionRef.current = recognition
 
-      recognitionRef.current = recognition
+    // Set state BEFORE starting to avoid race condition
+    isListeningRef.current = true
+    setIsListening(true)
 
-      try {
-        recognition.start()
-        console.log('Recognition start() called')
-      } catch (err) {
-        console.error('Failed to start listening:', err)
-        setIsListening(false)
-      }
+    try {
+      recognition.start()
+      console.log('Recognition start() called')
+    } catch (err) {
+      console.error('Failed to start listening:', err)
+      isListeningRef.current = false
+      setIsListening(false)
     }
   }
 
