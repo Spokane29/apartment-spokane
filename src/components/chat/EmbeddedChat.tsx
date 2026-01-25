@@ -71,6 +71,8 @@ export default function EmbeddedChat() {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const intentionalStopRef = useRef(false)
+  // Track if current conversation turn was initiated by voice
+  const voiceConversationActiveRef = useRef(false)
 
   useEffect(() => {
     initChat()
@@ -130,13 +132,14 @@ export default function EmbeddedChat() {
     if (!text.trim()) return
 
     intentionalStopRef.current = true
+    voiceConversationActiveRef.current = true // Mark voice conversation as active
     setInterimText('')
     stopListening()
     sendMessage(text.trim(), true) // true = from voice input
   }, [])
 
   const speakText = async (text: string) => {
-    if (!voiceEnabledRef.current) return
+    if (!voiceEnabledRef.current || !voiceConversationActiveRef.current) return
 
     try {
       setIsSpeaking(true)
@@ -172,36 +175,31 @@ export default function EmbeddedChat() {
         audio.onended = () => {
           console.log('Audio ended, starting auto-listen')
           setIsSpeaking(false)
-          setTimeout(() => {
-            if (voiceEnabledRef.current) {
-              startListening(true)
-            }
-          }, 300)
+          // Only auto-listen if voice conversation is still active
+          if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
+            setTimeout(() => startListening(true), 300)
+          }
         }
 
         audio.onerror = () => {
           console.error('Audio playback error')
           setIsSpeaking(false)
-          setTimeout(() => {
-            if (voiceEnabledRef.current) {
-              startListening(true)
-            }
-          }, 300)
+          if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
+            setTimeout(() => startListening(true), 300)
+          }
         }
 
         audio.load()
         audio.play().catch(err => {
           console.error('Audio play failed:', err)
           setIsSpeaking(false)
-          setTimeout(() => {
-            if (voiceEnabledRef.current) {
-              startListening(true)
-            }
-          }, 300)
+          if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
+            setTimeout(() => startListening(true), 300)
+          }
         })
       } else {
         setIsSpeaking(false)
-        if (voiceEnabledRef.current) {
+        if (voiceEnabledRef.current && voiceConversationActiveRef.current) {
           setTimeout(() => startListening(true), 300)
         }
       }
@@ -224,6 +222,11 @@ export default function EmbeddedChat() {
     if (!text || isLoading) return
 
     unlockAudio()
+
+    // If user types a message, deactivate voice conversation mode
+    if (!fromVoice) {
+      voiceConversationActiveRef.current = false
+    }
 
     const userMessage: Message = { id: Date.now(), role: 'user', content: text }
     setMessages(prev => [...prev, userMessage])
@@ -441,8 +444,14 @@ export default function EmbeddedChat() {
           className={`voice-toggle ${voiceEnabled ? 'active' : ''}`}
           onClick={() => {
             unlockAudio()
-            setVoiceEnabled(!voiceEnabled)
-            if (voiceEnabled) stopSpeaking()
+            const newState = !voiceEnabled
+            setVoiceEnabled(newState)
+            if (!newState) {
+              // When disabling voice, stop everything
+              stopSpeaking()
+              stopListening()
+              voiceConversationActiveRef.current = false
+            }
             // Refocus input after clicking
             setTimeout(() => inputRef.current?.focus(), 0)
           }}
