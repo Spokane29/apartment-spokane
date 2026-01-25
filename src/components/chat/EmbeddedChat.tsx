@@ -29,6 +29,7 @@ export default function EmbeddedChat() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
 
   useEffect(() => {
     initChat()
@@ -259,14 +260,9 @@ export default function EmbeddedChat() {
         setIsListening(true)
         setInterimText('')
 
-        // Create MediaRecorder to capture audio
-        const mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'audio/webm;codecs=opus'
-        })
-        mediaRecorderRef.current = mediaRecorder
-
         // Use AudioContext to get raw PCM data for Deepgram
         const audioContext = new AudioContext({ sampleRate: 16000 })
+        audioContextRef.current = audioContext
         const source = audioContext.createMediaStreamSource(stream)
         const processor = audioContext.createScriptProcessor(4096, 1, 1)
 
@@ -285,8 +281,8 @@ export default function EmbeddedChat() {
         source.connect(processor)
         processor.connect(audioContext.destination)
 
-        // Auto-stop after 8 seconds for auto-start, or 30 seconds for manual
-        const timeout = isAutoStart ? 8000 : 30000
+        // Auto-stop after 10 seconds for auto-start, or 30 seconds for manual
+        const timeout = isAutoStart ? 10000 : 30000
         listenTimeoutRef.current = setTimeout(() => {
           console.log('Listen timeout')
           stopListening()
@@ -337,8 +333,17 @@ export default function EmbeddedChat() {
     }
 
     if (wsRef.current) {
-      wsRef.current.close()
+      try {
+        wsRef.current.close()
+      } catch (e) {}
       wsRef.current = null
+    }
+
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close()
+      } catch (e) {}
+      audioContextRef.current = null
     }
 
     if (mediaRecorderRef.current) {
