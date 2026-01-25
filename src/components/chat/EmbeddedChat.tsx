@@ -159,19 +159,15 @@ export default function EmbeddedChat() {
   const speakText = async (text: string) => {
     if (!voiceEnabled) return
 
-    // Detect mobile - don't auto-play, just use browser TTS which is more reliable
+    // Disable voice responses on mobile - too unreliable
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    console.log('speakText called, isMobile:', isMobile)
-
-    setIsSpeaking(true)
-
     if (isMobile) {
-      // On mobile, use browser's built-in TTS (more reliable)
-      speakWithBrowserTTS(text)
+      console.log('Mobile detected - voice response disabled')
       return
     }
 
-    // On desktop, try ElevenLabs
+    // Desktop only - use ElevenLabs
+    setIsSpeaking(true)
     try {
       const res = await fetch('/api/voice/speak', {
         method: 'POST',
@@ -180,24 +176,22 @@ export default function EmbeddedChat() {
       })
 
       if (!res.ok) {
-        console.error('Voice API error, using browser TTS')
-        speakWithBrowserTTS(text)
+        setIsSpeaking(false)
         return
       }
 
       const data = await res.json()
-
       if (data.audio) {
         const played = await playAudio(data.audio)
         if (!played) {
-          speakWithBrowserTTS(text)
+          setIsSpeaking(false)
         }
       } else {
-        speakWithBrowserTTS(text)
+        setIsSpeaking(false)
       }
     } catch (err) {
       console.error('Failed to speak:', err)
-      speakWithBrowserTTS(text)
+      setIsSpeaking(false)
     }
   }
 
