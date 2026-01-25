@@ -39,25 +39,32 @@ async function saveSession(session) {
     console.error('Session select error:', selectError.message);
   }
 
+  // Ensure all boolean fields are explicitly boolean (not truthy strings)
   const payload = {
     session_id: session.session_id,
     message_count: session.message_count || 0,
     user_message_count: session.user_message_count || 0,
-    lead_captured: session.lead_captured || false,
+    lead_captured: Boolean(session.lead_captured),
     lead_id: session.lead_id || null,
-    tour_booked: session.tour_booked || false,
-    collected_name: session.collected_name || false,
-    collected_phone: session.collected_phone || false,
-    collected_email: session.collected_email || false,
-    collected_tour_date: session.collected_tour_date || false,
+    tour_booked: Boolean(session.tour_booked),
+    collected_name: Boolean(session.collected_name),
+    collected_phone: Boolean(session.collected_phone),
+    collected_email: Boolean(session.collected_email),
+    collected_tour_date: Boolean(session.collected_tour_date),
     collected_info: session.collected_info || {},
     messages: session.messages || [],
-    lead_sent_to_leasingvoice: session.lead_sent_to_leasingvoice || false,
+    lead_sent_to_leasingvoice: Boolean(session.lead_sent_to_leasingvoice),
     updated_at: new Date().toISOString()
   };
 
   console.log('Saving session:', session.session_id, 'collected_info:', JSON.stringify(session.collected_info));
-  console.log('Full payload being saved:', JSON.stringify(payload));
+  console.log('Full payload:', JSON.stringify(payload, null, 2));
+  console.log('Payload type checks:', {
+    collected_phone: typeof payload.collected_phone,
+    collected_phone_value: payload.collected_phone,
+    collected_email: typeof payload.collected_email,
+    collected_name: typeof payload.collected_name,
+  });
 
   if (existing) {
     console.log('Updating existing session...');
@@ -583,7 +590,7 @@ export default async function handler(req, res) {
     session.lead_captured = hasMinimumInfo;
     session.tour_booked = !!(info.tour_date) && hasMinimumInfo;
     session.collected_name = !!info.first_name;
-    session.collected_phone = !!info.phone;
+    session.collected_phone = info.phone ? true : false;
     session.collected_email = !!info.email;
     session.collected_tour_date = !!info.tour_date;
     session.message_count = session.message_count + 1; // +1 for assistant response
