@@ -388,21 +388,27 @@ function extractLeadInfo(messages) {
       // For other patterns, skip if message contains an email (to avoid extracting email username as name)
       const msgContainsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(msg);
       if (!msgContainsEmail) {
+        // Clean message - trim and remove trailing punctuation for matching
+        const cleanMsg = msg.trim().replace(/[.,!?]+$/, '').trim();
+
         // Try other patterns for standalone name responses (case-insensitive for voice input)
         const namePatterns = [
-          /^([a-z]+(?:\s+[a-z]+)?)$/im,
+          // Standalone name with optional punctuation: "Frank" or "Frank." or "frank smith"
+          /^([a-z]+(?:\s+[a-z]+)?)\s*[.,!?]*$/im,
+          // "name: Frank" or "name Frank"
           /name[:\s]+([a-z]+)/i,
-          /^([a-z]+\s+[a-z]+)$/im
+          // "It's Frank" pattern
+          /(?:it's|its)\s+([a-z]+)/i
         ];
         for (const pattern of namePatterns) {
-          const match = msg.match(pattern);
+          const match = cleanMsg.match(pattern);
           if (match) {
             const name = match[1].split(' ')[0];
-            // Skip if it's a common word, not a name
-            if (notNames.includes(name.toLowerCase())) continue;
+            // Skip if it's a common word, not a name, or too short
+            if (notNames.includes(name.toLowerCase()) || name.length < 2) continue;
             leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
             const parts = match[1].split(' ');
-            if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase())) {
+            if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase()) && parts[1].length > 1) {
               leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
             }
             break;
