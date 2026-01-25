@@ -496,8 +496,7 @@ export default function EmbeddedChat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isListening ? 'Listening...' : 'Type a message...'}
-          disabled={isLoading || isListening}
-          autoFocus
+          disabled={isLoading}
         />
         <button type="submit" disabled={isLoading || !input.trim()}>
           <Send size={16} />
