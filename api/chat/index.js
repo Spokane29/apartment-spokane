@@ -490,6 +490,8 @@ export default async function handler(req, res) {
 
   try {
     let { message, sessionId } = req.body;
+    console.log('=== CHAT API CALLED ===');
+    console.log('Received:', { message: message?.substring(0, 50), sessionId });
     if (!message) return res.status(400).json({ error: 'Message required' });
 
     // Preprocess message for voice input

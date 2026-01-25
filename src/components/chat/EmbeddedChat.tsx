@@ -116,6 +116,7 @@ export default function EmbeddedChat() {
 
     // Use ref to avoid stale closure in voice callbacks
     const currentSessionId = sessionIdRef.current
+    console.log('sendMessage called:', { text, fromVoice, currentSessionId })
 
     try {
       const res = await fetch('/api/chat', {
@@ -124,6 +125,7 @@ export default function EmbeddedChat() {
         body: JSON.stringify({ message: text, sessionId: currentSessionId }),
       })
       const data = await res.json()
+      console.log('Chat API response:', { sessionId: data.sessionId, message: data.message?.substring(0, 50) })
       setSessionId(data.sessionId)
       sessionIdRef.current = data.sessionId
       const assistantMessage = data.message
@@ -296,11 +298,13 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       const transcript = data.transcript?.trim()
+      console.log('Deepgram response:', { transcript, sessionIdRef: sessionIdRef.current })
 
       if (transcript) {
-        console.log('Transcribed:', transcript)
+        console.log('Transcribed, calling sendMessage with sessionId:', sessionIdRef.current)
         // Send the transcribed text as a message (same as typing)
         await sendMessage(transcript, true)
+        console.log('sendMessage completed for voice input')
       } else {
         console.log('No speech detected')
       }
