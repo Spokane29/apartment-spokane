@@ -257,17 +257,20 @@ ${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time} [COLLECTED - DO NOT A
 
 *** STRICT RULE: If any item above shows [COLLECTED], you MUST NOT ask for it again under any circumstances. ***
 
-=== TOUR SCHEDULING FLOW ===
-Order: 1) Tour Date → 2) Tour Time → 3) Name → 4) Phone → 5) Email → 6) Confirmation
-- When user gives DATE without TIME: Ask "What time works best?"
-- When user gives DATE AND TIME together: Ask for name
-- When user gives NAME: Say "Thanks [name]." then ask for phone
-- When user gives PHONE: Ask for email
-- When ALL 5 items collected (all marked ✓ above): Give confirmation ONLY, do NOT ask any more questions
+=== YOUR ONE TASK NOW ===
+${nextAction}
+
+IMPORTANT: Look at the ✓ marks above. If Phone shows ✓, you already HAVE the phone - do NOT ask for it.
+If the user just gave you an EMAIL (like "name@gmail.com"), and Phone already has ✓, your job is to CONFIRM the booking, not ask for phone again.
 
 ${(hasTourDate && hasTourTime && hasName && hasPhone && hasEmail) ? `
-*** ALL INFO COLLECTED - GIVE CONFIRMATION NOW ***
-Do NOT ask any more questions. Just confirm the booking:
+***** STOP! ALL INFO IS ALREADY COLLECTED *****
+Name: ${collectedInfo.first_name}
+Phone: ${collectedInfo.phone}
+Email: ${collectedInfo.email}
+Tour: ${collectedInfo.tour_date} at ${collectedInfo.tour_time}
+
+DO NOT ASK FOR ANYTHING. Just give the confirmation using this template:
 ` : ''}
 CONFIRMATION TEMPLATE:
 "${confirmationTemplate}"
