@@ -69,11 +69,17 @@ export default function EmbeddedChat() {
   const audioUnlockedRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const micStreamRef = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     initChat()
     return () => {
       stopListening()
+      // Cleanup mic stream on unmount
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(track => track.stop())
+        micStreamRef.current = null
+      }
     }
   }, [])
 
@@ -126,6 +132,12 @@ export default function EmbeddedChat() {
   const handleVoiceInput = useCallback((text: string) => {
     console.log('Voice result:', text)
     if (!text.trim()) return
+
+    // CRITICAL: Release mic stream after getting speech (mobile fix)
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop())
+      micStreamRef.current = null
+    }
 
     setInterimText('')
     stopListening()
@@ -249,8 +261,8 @@ export default function EmbeddedChat() {
     }
   }
 
-  // Start Web Speech API listening
-  const startListening = (isAutoStart = false) => {
+  // Start Web Speech API listening with mobile fixes
+  const startListening = async (isAutoStart = false, retryCount = 0) => {
     unlockAudio()
     stopSpeaking()
 
@@ -261,7 +273,13 @@ export default function EmbeddedChat() {
       return
     }
 
-    // Stop existing recognition
+    // Clear any existing timeout
+    if (listenTimeoutRef.current) {
+      clearTimeout(listenTimeoutRef.current)
+      listenTimeoutRef.current = null
+    }
+
+    // CRITICAL: Fully cleanup old recognition before creating new
     if (recognitionRef.current) {
       try {
         recognitionRef.current.abort()
@@ -269,7 +287,30 @@ export default function EmbeddedChat() {
       recognitionRef.current = null
     }
 
+    // CRITICAL: Release previous mic stream completely (mobile fix)
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop())
+      micStreamRef.current = null
+    }
+
+    // Longer delay for mobile - give browser time to release mic
+    const delay = isAutoStart ? (retryCount === 0 ? 500 : 400) : 100
+
+    await new Promise(resolve => setTimeout(resolve, delay))
+
+    // Re-request fresh mic access (mobile fix)
     try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      micStreamRef.current = stream
+      console.log('Mic stream acquired')
+    } catch (err) {
+      console.error('Mic permission denied or unavailable:', err)
+      setIsListening(false)
+      return
+    }
+
+    try {
+      // ALWAYS create fresh recognition instance (mobile fix)
       const recognition = new SpeechRecognition()
       recognitionRef.current = recognition
 
@@ -333,6 +374,12 @@ export default function EmbeddedChat() {
     } catch (err) {
       console.error('Failed to start speech recognition:', err)
       setIsListening(false)
+
+      // Retry up to 2 times (mobile fix)
+      if (retryCount < 2 && isAutoStart) {
+        console.log(`Retrying speech recognition (attempt ${retryCount + 1})`)
+        setTimeout(() => startListening(isAutoStart, retryCount + 1), 600)
+      }
     }
   }
 
@@ -347,6 +394,12 @@ export default function EmbeddedChat() {
         recognitionRef.current.abort()
       } catch (e) {}
       recognitionRef.current = null
+    }
+
+    // Release mic stream (mobile fix)
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop())
+      micStreamRef.current = null
     }
 
     setIsListening(false)
