@@ -69,17 +69,12 @@ export default function EmbeddedChat() {
   const audioUnlockedRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const micStreamRef = useRef<MediaStream | null>(null)
+  const intentionalStopRef = useRef(false)
 
   useEffect(() => {
     initChat()
     return () => {
       stopListening()
-      // Cleanup mic stream on unmount
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach(track => track.stop())
-        micStreamRef.current = null
-      }
     }
   }, [])
 
@@ -133,12 +128,7 @@ export default function EmbeddedChat() {
     console.log('Voice result:', text)
     if (!text.trim()) return
 
-    // CRITICAL: Release mic stream after getting speech (mobile fix)
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop())
-      micStreamRef.current = null
-    }
-
+    intentionalStopRef.current = true
     setInterimText('')
     stopListening()
     sendMessage(text.trim())
@@ -287,32 +277,19 @@ export default function EmbeddedChat() {
       recognitionRef.current = null
     }
 
-    // CRITICAL: Release previous mic stream completely (mobile fix)
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop())
-      micStreamRef.current = null
-    }
-
     // Longer delay for mobile - give browser time to release mic
-    const delay = isAutoStart ? (retryCount === 0 ? 500 : 400) : 100
+    const delay = isAutoStart ? (retryCount === 0 ? 600 : 400) : 100
 
     await new Promise(resolve => setTimeout(resolve, delay))
 
-    // Re-request fresh mic access (mobile fix)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      micStreamRef.current = stream
-      console.log('Mic stream acquired')
-    } catch (err) {
-      console.error('Mic permission denied or unavailable:', err)
-      setIsListening(false)
-      return
-    }
+    // Note: We removed getUserMedia here because SpeechRecognition handles its own mic access
+    // and calling getUserMedia can conflict on iOS Safari
 
     try {
       // ALWAYS create fresh recognition instance (mobile fix)
       const recognition = new SpeechRecognition()
       recognitionRef.current = recognition
+      intentionalStopRef.current = false
 
       recognition.continuous = false
       recognition.interimResults = true
@@ -349,25 +326,38 @@ export default function EmbeddedChat() {
 
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error)
-        if (event.error !== 'aborted' && event.error !== 'no-speech') {
-          // Don't show alert for common non-errors
-        }
         setIsListening(false)
         setInterimText('')
+
+        // If not intentional stop and auto-start, retry
+        if (!intentionalStopRef.current && isAutoStart && retryCount < 2) {
+          console.log(`Speech error, retrying (attempt ${retryCount + 1})`)
+          setTimeout(() => startListening(isAutoStart, retryCount + 1), 800)
+        }
       }
 
       recognition.onend = () => {
-        console.log('Speech recognition ended')
+        console.log('Speech recognition ended, intentional:', intentionalStopRef.current)
         setIsListening(false)
         setInterimText('')
+
+        // If recognition ended unexpectedly during auto-listen, retry
+        if (!intentionalStopRef.current && isAutoStart && retryCount < 2) {
+          console.log(`Recognition ended unexpectedly, retrying (attempt ${retryCount + 1})`)
+          setTimeout(() => startListening(isAutoStart, retryCount + 1), 800)
+        }
       }
 
+      // Set listening state early before start() to reduce flicker
+      setIsListening(true)
       recognition.start()
+      console.log('Speech recognition start() called')
 
       // Auto-stop after timeout
       const timeout = isAutoStart ? 10000 : 30000
       listenTimeoutRef.current = setTimeout(() => {
         console.log('Listen timeout')
+        intentionalStopRef.current = true
         stopListening()
       }, timeout)
 
@@ -378,12 +368,14 @@ export default function EmbeddedChat() {
       // Retry up to 2 times (mobile fix)
       if (retryCount < 2 && isAutoStart) {
         console.log(`Retrying speech recognition (attempt ${retryCount + 1})`)
-        setTimeout(() => startListening(isAutoStart, retryCount + 1), 600)
+        setTimeout(() => startListening(isAutoStart, retryCount + 1), 800)
       }
     }
   }
 
   const stopListening = () => {
+    intentionalStopRef.current = true
+
     if (listenTimeoutRef.current) {
       clearTimeout(listenTimeoutRef.current)
       listenTimeoutRef.current = null
@@ -394,12 +386,6 @@ export default function EmbeddedChat() {
         recognitionRef.current.abort()
       } catch (e) {}
       recognitionRef.current = null
-    }
-
-    // Release mic stream (mobile fix)
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop())
-      micStreamRef.current = null
     }
 
     setIsListening(false)
