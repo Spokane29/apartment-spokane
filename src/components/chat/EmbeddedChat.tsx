@@ -63,6 +63,7 @@ export default function EmbeddedChat() {
   const [interimText, setInterimText] = useState('')
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const voiceEnabledRef = useRef(true)
   const persistentAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -249,6 +250,8 @@ export default function EmbeddedChat() {
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again or call us at (888) 613-0442." }])
     } finally {
       setIsLoading(false)
+      // Refocus input after sending
+      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 
@@ -428,7 +431,10 @@ export default function EmbeddedChat() {
             unlockAudio()
             setVoiceEnabled(!voiceEnabled)
             if (voiceEnabled) stopSpeaking()
+            // Refocus input after clicking
+            setTimeout(() => inputRef.current?.focus(), 0)
           }}
+          tabIndex={-1}
         >
           {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
@@ -469,18 +475,29 @@ export default function EmbeddedChat() {
         <button
           type="button"
           className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={() => isListening ? stopListening() : startListening()}
+          onClick={() => {
+            if (isListening) {
+              stopListening()
+              // Refocus input after stopping
+              setTimeout(() => inputRef.current?.focus(), 0)
+            } else {
+              startListening()
+            }
+          }}
           disabled={isLoading || isSpeaking}
+          tabIndex={-1}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isListening ? 'Listening...' : 'Type a message...'}
           disabled={isLoading || isListening}
+          autoFocus
         />
         <button type="submit" disabled={isLoading || !input.trim()}>
           <Send size={16} />
