@@ -588,6 +588,9 @@ export default async function handler(req, res) {
     session.collected_tour_date = !!info.tour_date;
     session.message_count = session.message_count + 1; // +1 for assistant response
 
+    console.log('DEBUG: session.collected_phone =', session.collected_phone, 'type:', typeof session.collected_phone);
+    console.log('DEBUG: info.phone =', info.phone, 'type:', typeof info.phone);
+
     // Save session to database
     let saveError = null;
     try {
