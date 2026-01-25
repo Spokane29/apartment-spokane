@@ -306,9 +306,10 @@ function extractLeadInfo(messages) {
   const userText = messages.filter((m) => m.role === 'user').map((m) => m.content).join(' ');
   const leadInfo = {};
 
-  // Check if this message contains an email - if so, don't try to extract name
+  // Check if this message contains a real email - if so, don't try to extract name
   // (prevents extracting "mccoy" from "mccoy@gmail.com" as a name)
-  const containsEmail = /@/.test(userText);
+  // But don't match date@time like "tonight@7:00"
+  const containsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(userText);
 
   // Extract name - multiple patterns (but NOT if message contains email)
   if (!containsEmail) {
@@ -351,8 +352,8 @@ function extractLeadInfo(messages) {
     }
   }
 
-  // Extract tour date
-  const datePattern = /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|\d{1,2}\/\d{1,2})/i;
+  // Extract tour date - include "tonight" and "this evening"
+  const datePattern = /(tonight|tomorrow|today|this evening|this afternoon|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|\d{1,2}\/\d{1,2})/i;
   const dateMatch = userText.match(datePattern);
   if (dateMatch) {
     leadInfo.tour_date = dateMatch[1];
@@ -368,12 +369,17 @@ function extractLeadInfo(messages) {
   return Object.keys(leadInfo).length > 0 ? leadInfo : null;
 }
 
-// Preprocess voice input to handle spoken emails and phone numbers
+// Preprocess voice input to handle spoken emails, phone numbers, and date/time
 function preprocessVoiceInput(text) {
   let result = text;
 
+  // FIRST: Fix date@time format (e.g., "tonight@7:00" → "tonight at 7:00")
+  // This must happen BEFORE email processing
+  result = result.replace(/(tonight|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)@(\d)/gi, '$1 at $2');
+
   // Convert spoken emails: "joe at gmail dot com" → "joe@gmail.com"
-  result = result.replace(/\s+at\s+/gi, '@');
+  // But NOT for time expressions like "today at 7"
+  result = result.replace(/(\w+)\s+at\s+(gmail|yahoo|hotmail|outlook|icloud)/gi, '$1@$2');
   result = result.replace(/\s+dot\s+/gi, '.');
 
   // Common voice misheards for email
@@ -382,8 +388,8 @@ function preprocessVoiceInput(text) {
   result = result.replace(/\boutlook\b/gi, 'outlook');
   result = result.replace(/\bhotmail\b/gi, 'hotmail');
 
-  // Remove spaces around @ and . in email-like strings
-  result = result.replace(/\s*@\s*/g, '@');
+  // Remove spaces around @ and . in email-like strings (but not in date/time)
+  result = result.replace(/(\w)@(\w)/g, '$1@$2');
   result = result.replace(/(\w)\s*\.\s*(com|org|net|edu|io)/gi, '$1.$2');
 
   return result;
