@@ -180,19 +180,21 @@ function App() {
               </div>
 
               {/* Right: Embedded Chat (Sticky on desktop) */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 -mx-3 lg:mx-0">
                 <div id="contact-form">
-                  <Card className="shadow-lg border border-primary/20 overflow-hidden">
-                    <div className="bg-primary text-white p-3">
-                      <div className="flex items-center gap-2">
-                        <MessageCircle className="w-5 h-5" />
-                        <h3 className="font-bold text-base">Your Personal AI Assistant</h3>
+                  <Card className="shadow-lg border-x-0 lg:border-x border border-primary/20 overflow-hidden rounded-none lg:rounded-lg">
+                    <div className="bg-primary text-white p-2 lg:p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4 lg:w-5 lg:h-5" />
+                          <h3 className="font-bold text-sm lg:text-base">Chat with AI Assistant</h3>
+                        </div>
+                        <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full hidden sm:inline">
+                          Voice enabled
+                        </span>
                       </div>
-                      <p className="text-primary-foreground/90 text-sm mt-1">
-                        I can answer questions and schedule tours
-                      </p>
                     </div>
-                    <CardContent className="p-3">
+                    <CardContent className="p-2 lg:p-3">
                       <EmbeddedChat />
                       <p className="text-muted-foreground text-xs text-center mt-2">
                         Or call us: <a href="tel:8886130442" className="text-primary font-semibold hover:underline">(888) 613-0442</a>

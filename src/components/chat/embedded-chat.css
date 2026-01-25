@@ -5,6 +5,13 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Mobile: taller chat, larger touch targets */
+@media (max-width: 768px) {
+  .embedded-chat {
+    height: 380px;
+  }
+}
+
 .embedded-chat-messages {
   flex: 1;
   overflow-y: auto;
@@ -112,6 +119,15 @@
   border-color: #475569;
 }
 
+/* Mobile: larger input */
+@media (max-width: 768px) {
+  .embedded-chat-input input {
+    padding: 12px 16px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+    border-radius: 24px;
+  }
+}
+
 .embedded-chat-input button {
   width: 36px;
   height: 36px;
@@ -173,6 +189,13 @@
   color: white;
 }
 
+/* Hide voice toggle on mobile since TTS is disabled */
+@media (max-width: 768px) {
+  .embedded-chat-header-controls {
+    display: none;
+  }
+}
+
 .mic-button {
   width: 44px;
   height: 44px;
@@ -221,6 +244,36 @@
 @keyframes micPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+/* Mobile: larger buttons */
+@media (max-width: 768px) {
+  .mic-button {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    min-height: 50px;
+  }
+
+  .mic-button svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .embedded-chat-input button[type="submit"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .embedded-chat-input button[type="submit"] svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .embedded-chat-input {
+    gap: 10px;
+    padding: 4px 0;
+  }
 }
 
 .transcribing-indicator {
