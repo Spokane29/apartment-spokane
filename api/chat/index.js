@@ -248,12 +248,14 @@ YOUR NEXT ACTION: ${nextAction}
 PROPERTY KNOWLEDGE:
 ${knowledgeContent}
 
-=== ALREADY COLLECTED INFO (NEVER ask for these again) ===
-${hasName ? `✓ Name: ${collectedInfo.first_name}${collectedInfo.last_name ? ' ' + collectedInfo.last_name : ''}` : '○ Name: NOT YET COLLECTED'}
-${hasPhone ? `✓ Phone: ${collectedInfo.phone}` : '○ Phone: NOT YET COLLECTED'}
-${hasEmail ? `✓ Email: ${collectedInfo.email}` : '○ Email: NOT YET COLLECTED'}
-${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date}` : '○ Tour Date: NOT YET COLLECTED'}
-${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time}` : '○ Tour Time: NOT YET COLLECTED'}
+=== ALREADY COLLECTED INFO (NEVER ask for these again - CRITICAL) ===
+${hasName ? `✓ Name: ${collectedInfo.first_name}${collectedInfo.last_name ? ' ' + collectedInfo.last_name : ''} [COLLECTED - DO NOT ASK AGAIN]` : '○ Name: NOT YET COLLECTED'}
+${hasPhone ? `✓ Phone: ${collectedInfo.phone} [COLLECTED - DO NOT ASK AGAIN]` : '○ Phone: NOT YET COLLECTED'}
+${hasEmail ? `✓ Email: ${collectedInfo.email} [COLLECTED - DO NOT ASK AGAIN]` : '○ Email: NOT YET COLLECTED'}
+${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date} [COLLECTED - DO NOT ASK AGAIN]` : '○ Tour Date: NOT YET COLLECTED'}
+${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time} [COLLECTED - DO NOT ASK AGAIN]` : '○ Tour Time: NOT YET COLLECTED'}
+
+*** STRICT RULE: If any item above shows [COLLECTED], you MUST NOT ask for it again under any circumstances. ***
 
 === TOUR SCHEDULING FLOW ===
 Order: 1) Tour Date → 2) Tour Time → 3) Name → 4) Phone → 5) Email → 6) Confirmation
@@ -280,9 +282,15 @@ CONFIRMATION TEMPLATE:
 - NEVER ask for info already marked with ✓ above
 - NEVER use exclamation points
 
-=== IF INPUT IS UNCLEAR OR INVALID ===
+=== EMAIL HANDLING - VERY IMPORTANT ===
+- An email is VALID if it has: text + @ + domain (like "ted@gmail.com", "joe@yahoo.com")
+- ACCEPT any email that contains @ with text on both sides. Examples of VALID emails: ted@gmail.com, Joe@yahoo.com, test123@mail.com
+- NEVER say "voice sometimes misses part" - the user may have typed it
+- NEVER ask user to retype an email that already has text@domain format
+- If email is already marked as [COLLECTED] above, do NOT ask for it again
+
+=== IF INPUT IS UNCLEAR ===
 - Ask them to clarify or re-enter
-- For incomplete emails (like "@gmail.com" or "at gmail.com"): say "Could you please type your full email in the text box below? Voice sometimes misses part of it."
 - Do NOT restart the conversation
 - Do NOT say "Hi" or greet them again
 - Stay in the current flow
@@ -309,12 +317,14 @@ YOUR NEXT ACTION: ${nextAction}
 - Available now, pet friendly
 - Historic Spokane neighborhood
 
-=== ALREADY COLLECTED (NEVER ask again) ===
-${hasName ? `✓ Name: ${collectedInfo.first_name}` : '○ Name: NOT YET'}
-${hasPhone ? `✓ Phone: ${collectedInfo.phone}` : '○ Phone: NOT YET'}
-${hasEmail ? `✓ Email: ${collectedInfo.email}` : '○ Email: NOT YET'}
-${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date}` : '○ Tour Date: NOT YET'}
-${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time}` : '○ Tour Time: NOT YET'}
+=== ALREADY COLLECTED (NEVER ask again - STRICT RULE) ===
+${hasName ? `✓ Name: ${collectedInfo.first_name} [COLLECTED - DO NOT ASK]` : '○ Name: NOT YET'}
+${hasPhone ? `✓ Phone: ${collectedInfo.phone} [COLLECTED - DO NOT ASK]` : '○ Phone: NOT YET'}
+${hasEmail ? `✓ Email: ${collectedInfo.email} [COLLECTED - DO NOT ASK]` : '○ Email: NOT YET'}
+${hasTourDate ? `✓ Tour Date: ${collectedInfo.tour_date} [COLLECTED - DO NOT ASK]` : '○ Tour Date: NOT YET'}
+${hasTourTime ? `✓ Tour Time: ${collectedInfo.tour_time} [COLLECTED - DO NOT ASK]` : '○ Tour Time: NOT YET'}
+
+EMAIL RULE: Accept any email with text@domain format (ted@gmail.com is VALID). Never ask to retype valid emails.
 
 === LAST USER MESSAGE ===
 "${lastUserMessage}"
@@ -486,6 +496,16 @@ export default async function handler(req, res) {
     const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
 
     const systemPrompt = await buildSystemPrompt(aiConfig, session.collected_info, session.message_count, message);
+
+    // Debug log what we're sending to Claude
+    console.log('Session state before AI call:', {
+      sessionId: session.session_id,
+      messageCount: session.message_count,
+      collected: session.collected_info,
+      hasName: !!session.collected_info.first_name,
+      hasEmail: !!session.collected_info.email
+    });
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 100, // Keep responses very short
