@@ -588,11 +588,13 @@ export default async function handler(req, res) {
     session.collected_tour_date = !!info.tour_date;
     session.message_count = session.message_count + 1; // +1 for assistant response
 
-    // Save session to database (don't fail request if this errors)
+    // Save session to database
+    let saveError = null;
     try {
       await saveSession(session);
     } catch (saveErr) {
-      console.error('Session save error (non-fatal):', saveErr.message);
+      console.error('Session save error:', saveErr.message);
+      saveError = saveErr.message;
     }
 
     res.json({
@@ -600,7 +602,8 @@ export default async function handler(req, res) {
       sessionId: session.session_id,
       _debug: {
         collected_info: session.collected_info,
-        message_count: session.message_count
+        message_count: session.message_count,
+        saveError: saveError
       }
     });
   } catch (error) {
