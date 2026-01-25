@@ -349,6 +349,9 @@ function extractLeadInfo(messages) {
   const leadInfo = {};
   const userMessages = messages.filter((m) => m.role === 'user').map((m) => m.content);
 
+  // Common words that should NOT be extracted as names
+  const notNames = ['interested', 'looking', 'wondering', 'calling', 'texting', 'asking', 'inquiring', 'here', 'ready', 'available', 'free', 'busy', 'good', 'great', 'fine', 'okay', 'sure', 'yes', 'no', 'maybe', 'the', 'this', 'that', 'what', 'when', 'where', 'how', 'why', 'who'];
+
   // Process each message individually for name extraction
   // This prevents email in later messages from blocking name extraction from earlier messages
   for (const msg of userMessages) {
@@ -358,20 +361,36 @@ function extractLeadInfo(messages) {
       const msgContainsEmail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|mail|email)/i.test(msg);
 
       if (!msgContainsEmail) {
+        // Prioritize explicit "my name is" pattern first
+        const explicitNameMatch = msg.match(/(?:my name is|name is|call me)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i);
+        if (explicitNameMatch) {
+          const name = explicitNameMatch[1].split(' ')[0];
+          if (!notNames.includes(name.toLowerCase())) {
+            leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+            const parts = explicitNameMatch[1].split(' ');
+            if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase())) {
+              leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+            }
+            continue;
+          }
+        }
+
+        // Then try other patterns
         const namePatterns = [
-          /(?:I'm|I am|my name is|this is|call me|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
+          /(?:I'm|I am|this is|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)/i,
           /^([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)?)$/im,
           /name[:\s]+([A-Z][a-z]+)/i,
-          // Catch simple two-word names like "Joe Schmoe" or "joe schmoe"
           /^([A-Z]?[a-z]+\s+[A-Z]?[a-z]+)$/im
         ];
         for (const pattern of namePatterns) {
           const match = msg.match(pattern);
           if (match) {
             const name = match[1].split(' ')[0];
+            // Skip if it's a common word, not a name
+            if (notNames.includes(name.toLowerCase())) continue;
             leadInfo.first_name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
             const parts = match[1].split(' ');
-            if (parts.length > 1) {
+            if (parts.length > 1 && !notNames.includes(parts[1].toLowerCase())) {
               leadInfo.last_name = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
             }
             break;
