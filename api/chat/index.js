@@ -7,20 +7,37 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 // Database-backed session storage for serverless
 async function getSession(sessionId) {
   if (!sessionId) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('chat_sessions')
     .select('*')
     .eq('session_id', sessionId)
-    .single();
+    .maybeSingle();
+
+  if (error) {
+    console.error('getSession error:', error.message);
+    return null;
+  }
+
+  if (data) {
+    console.log('Loaded session:', sessionId, 'collected_info:', JSON.stringify(data.collected_info));
+  } else {
+    console.log('No existing session found for:', sessionId);
+  }
+
   return data;
 }
 
 async function saveSession(session) {
-  const { data: existing } = await supabase
+  // Use maybeSingle to avoid throwing when no record found
+  const { data: existing, error: selectError } = await supabase
     .from('chat_sessions')
     .select('id')
     .eq('session_id', session.session_id)
-    .single();
+    .maybeSingle();
+
+  if (selectError) {
+    console.error('Session select error:', selectError.message);
+  }
 
   const payload = {
     session_id: session.session_id,
@@ -39,10 +56,20 @@ async function saveSession(session) {
     updated_at: new Date().toISOString()
   };
 
+  console.log('Saving session:', session.session_id, 'collected_info:', JSON.stringify(session.collected_info));
+
   if (existing) {
-    await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id);
+    const { error: updateError } = await supabase.from('chat_sessions').update(payload).eq('session_id', session.session_id);
+    if (updateError) {
+      console.error('Session update error:', updateError.message);
+      throw updateError;
+    }
   } else {
-    await supabase.from('chat_sessions').insert([payload]);
+    const { error: insertError } = await supabase.from('chat_sessions').insert([payload]);
+    if (insertError) {
+      console.error('Session insert error:', insertError.message);
+      throw insertError;
+    }
   }
 }
 
@@ -439,14 +466,21 @@ export default async function handler(req, res) {
     // Extract lead info from this message
     // IMPORTANT: Don't overwrite already-collected info
     const newLeadInfo = extractLeadInfo([{ role: 'user', content: message }]);
+    console.log('Extracted from message:', message, '→', JSON.stringify(newLeadInfo));
+    console.log('Existing collected_info:', JSON.stringify(session.collected_info));
+
     if (newLeadInfo) {
       // Only add NEW fields, never overwrite existing ones
       for (const [key, value] of Object.entries(newLeadInfo)) {
         if (!session.collected_info[key]) {
+          console.log('Adding new field:', key, '=', value);
           session.collected_info[key] = value;
+        } else {
+          console.log('Skipping existing field:', key, '(already have:', session.collected_info[key], ')');
         }
       }
     }
+    console.log('Final collected_info:', JSON.stringify(session.collected_info));
 
     // Get AI config for confirmation template
     const { data: aiConfig } = await supabase.from('ai_config').select('*').single();
