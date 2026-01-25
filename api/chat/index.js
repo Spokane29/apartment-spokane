@@ -442,7 +442,9 @@ function extractLeadInfo(messages) {
   const moveInPatterns = [
     /(?:move|moving|move-in|move in)(?:\s+in)?\s+(?:around|on|by|in)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
     /(?:looking to move|planning to move|want to move|need to move)\s+(?:in\s+)?(?:around|on|by|in)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|next month|next week|asap|immediately|soon|\d{1,2}\/\d{1,2})/i,
-    /(?:move-in|move in|moving)\s+(?:date|time)?\s*(?:is|would be|:)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|next month|next week|asap|immediately|soon|end of \w+|beginning of \w+|\d{1,2}\/\d{1,2})/i
+    /(?:move-in|move in|moving)\s+(?:date|time)?\s*(?:is|would be|:)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|next month|next week|asap|immediately|soon|end of \w+|beginning of \w+|\d{1,2}\/\d{1,2})/i,
+    // Standalone month or timeframe (for direct answers like "February" or "ASAP")
+    /^(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|next month|next week|asap|immediately|soon|end of \w+|beginning of \w+|a few weeks|couple weeks|couple of weeks|30 days|60 days|90 days)$/im
   ];
   for (const pattern of moveInPatterns) {
     const match = userText.match(pattern);
