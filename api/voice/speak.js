@@ -33,6 +33,16 @@ function convertToSpeakable(text) {
   // Convert phone numbers to be more speakable
   result = result.replace(/\((\d{3})\)\s*(\d{3})-(\d{4})/g, '$1 $2 $3');
 
+  // Convert common abbreviations
+  result = result.replace(/\btxt\b/gi, 'text');
+  result = result.replace(/\bappt\b/gi, 'appointment');
+  result = result.replace(/\bsq\s*ft\b/gi, 'square feet');
+  result = result.replace(/\bbr\b/gi, 'bedroom');
+  result = result.replace(/\bba\b/gi, 'bathroom');
+  result = result.replace(/\bw\/\b/gi, 'with');
+  result = result.replace(/\bw\/o\b/gi, 'without');
+  result = result.replace(/\basap\b/gi, 'as soon as possible');
+
   return result;
 }
 
