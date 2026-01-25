@@ -637,16 +637,19 @@ export default async function handler(req, res) {
       }
     }
 
-    // Send to LeasingVoice API - send once we have phone OR email
-    // Don't require all fields - send partial leads too
+    // Send to LeasingVoice API - wait until we've reached/passed the email step
+    // This ensures we ask for all info before sending, but still send if user skips email
     const hasContactInfo = info.phone || info.email;
+    // Send if: we have email (completed email step) OR we have name+phone (reached email step, user skipped)
+    const readyToSend = info.email || (info.first_name && info.phone);
     console.log('Lead status check:', {
       hasMinimumInfo,
       hasContactInfo,
+      readyToSend,
       lead_sent_to_leasingvoice: session.lead_sent_to_leasingvoice,
       info
     });
-    if (hasContactInfo && !session.lead_sent_to_leasingvoice) {
+    if (hasContactInfo && readyToSend && !session.lead_sent_to_leasingvoice) {
       console.log('Sending lead to LeasingVoice:', info);
       const result = await sendToLeadsAPI({
         first_name: info.first_name,

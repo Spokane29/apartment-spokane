@@ -28,6 +28,8 @@ export default function EmbeddedChat() {
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hasSpokenRef = useRef(false)
   const sessionIdRef = useRef<string | null>(null)
+  const audioUnlockedRef = useRef(false)
+  const pendingAudioRef = useRef<string | null>(null)
 
   // Keep sessionIdRef in sync with state
   useEffect(() => {
@@ -63,6 +65,46 @@ export default function EmbeddedChat() {
     }
   }
 
+  // Unlock audio on iOS - must be called during user gesture
+  const unlockAudio = () => {
+    if (audioUnlockedRef.current) return
+
+    // Create a persistent audio element and play silent audio to unlock
+    const audio = new Audio()
+    audio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7v/////////////////////////////////'
+    audio.volume = 0.01
+    audio.play().then(() => {
+      audio.pause()
+      audioUnlockedRef.current = true
+      audioRef.current = audio
+      console.log('Audio unlocked for iOS')
+
+      // Play any pending audio
+      if (pendingAudioRef.current) {
+        playAudio(pendingAudioRef.current)
+        pendingAudioRef.current = null
+      }
+    }).catch(err => {
+      console.log('Audio unlock failed:', err)
+    })
+  }
+
+  // Play audio from base64 data
+  const playAudio = async (base64Audio: string) => {
+    try {
+      const audio = audioRef.current || new Audio()
+      audio.src = `data:audio/mpeg;base64,${base64Audio}`
+      audio.volume = 1
+      audio.onended = () => setIsSpeaking(false)
+      audio.onerror = () => setIsSpeaking(false)
+      audioRef.current = audio
+      await audio.play()
+    } catch (err) {
+      console.error('Audio play failed:', err)
+      setIsSpeaking(false)
+    }
+  }
+
   const speakText = async (text: string) => {
     if (!voiceEnabled) return
 
@@ -82,11 +124,13 @@ export default function EmbeddedChat() {
 
       const data = await res.json()
       if (data.audio) {
-        const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`)
-        audioRef.current = audio
-        audio.onended = () => setIsSpeaking(false)
-        audio.onerror = () => setIsSpeaking(false)
-        await audio.play()
+        if (audioUnlockedRef.current) {
+          await playAudio(data.audio)
+        } else {
+          // Store for later when audio is unlocked
+          pendingAudioRef.current = data.audio
+          console.log('Audio not unlocked, storing for later')
+        }
       } else {
         setIsSpeaking(false)
       }
@@ -146,6 +190,9 @@ export default function EmbeddedChat() {
   // Start recording audio with silence detection
   const startRecording = async () => {
     try {
+      // Unlock audio for iOS during user gesture
+      unlockAudio()
+
       // Stop any playing audio first
       stopSpeaking()
 
