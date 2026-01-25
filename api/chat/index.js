@@ -218,6 +218,7 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0,
   const hasName = !!collectedInfo.first_name;
   const hasPhone = !!collectedInfo.phone;
   const hasEmail = !!collectedInfo.email;
+  const hasMoveInDate = !!collectedInfo.move_in_date;
 
   let conversationState = 'GREETING';
   let nextAction = 'Answer questions or offer to schedule a tour';
@@ -232,6 +233,8 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0,
       nextAction = 'Ask for their PHONE NUMBER';
     } else if (!hasEmail) {
       nextAction = 'Ask for their EMAIL';
+    } else if (!hasMoveInDate) {
+      nextAction = 'Ask when they are planning to MOVE IN (what month/timeframe)';
     } else {
       nextAction = 'Give the confirmation message - all info collected';
     }
@@ -249,9 +252,10 @@ async function buildSystemPrompt(aiConfig, collectedInfo = {}, messageCount = 0,
     if (hasEmail) collectedStatus.push(`Email: ${collectedInfo.email}`);
     if (hasTourDate) collectedStatus.push(`Tour Date: ${collectedInfo.tour_date}`);
     if (hasTourTime) collectedStatus.push(`Tour Time: ${collectedInfo.tour_time}`);
+    if (hasMoveInDate) collectedStatus.push(`Move-in Date: ${collectedInfo.move_in_date}`);
 
     // All collected - ready for confirmation
-    const allCollected = hasTourDate && hasTourTime && hasName && hasPhone && hasEmail;
+    const allCollected = hasTourDate && hasTourTime && hasName && hasPhone && hasEmail && hasMoveInDate;
 
     return `You are a leasing assistant for South Oak Apartments.
 
@@ -268,11 +272,13 @@ ${hasPhone ? `- Phone: ${collectedInfo.phone} ✓ HAVE IT` : ''}
 ${hasEmail ? `- Email: ${collectedInfo.email} ✓ HAVE IT` : ''}
 ${hasTourDate ? `- Tour Date: ${collectedInfo.tour_date} ✓ HAVE IT` : ''}
 ${hasTourTime ? `- Tour Time: ${collectedInfo.tour_time} ✓ HAVE IT` : ''}
+${hasMoveInDate ? `- Move-in Date: ${collectedInfo.move_in_date} ✓ HAVE IT` : ''}
 
 STILL NEED TO COLLECT:
 ${!hasName && (hasTourDate || hasTourTime) ? '- Name (ask for this next)' : ''}
 ${!hasPhone && hasName ? '- Phone (ask for this next)' : ''}
 ${!hasEmail && hasPhone ? '- Email (ask for this next)' : ''}
+${!hasMoveInDate && hasEmail ? '- Move-in Date (ask "When are you planning to move?")' : ''}
 ${!hasTourDate ? '- Tour Date' : ''}
 ${!hasTourTime && hasTourDate ? '- Tour Time' : ''}
 
@@ -432,6 +438,20 @@ function extractLeadInfo(messages) {
     leadInfo.tour_time = timeMatch[1];
   }
 
+  // Extract move-in date (different from tour date)
+  const moveInPatterns = [
+    /(?:move|moving|move-in|move in)(?:\s+in)?\s+(?:around|on|by|in)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
+    /(?:looking to move|planning to move|want to move|need to move)\s+(?:in\s+)?(?:around|on|by|in)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|next month|next week|asap|immediately|soon|\d{1,2}\/\d{1,2})/i,
+    /(?:move-in|move in|moving)\s+(?:date|time)?\s*(?:is|would be|:)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|next month|next week|asap|immediately|soon|end of \w+|beginning of \w+|\d{1,2}\/\d{1,2})/i
+  ];
+  for (const pattern of moveInPatterns) {
+    const match = userText.match(pattern);
+    if (match) {
+      leadInfo.move_in_date = match[1];
+      break;
+    }
+  }
+
   return Object.keys(leadInfo).length > 0 ? leadInfo : null;
 }
 
@@ -557,7 +577,7 @@ export default async function handler(req, res) {
         last_name: info.last_name || '',
         phone: info.phone,
         email: info.email || '',
-        move_in_date: info.tour_date || '',
+        move_in_date: info.move_in_date || '',
         chat_transcript: session.messages,
         source: 'website-chat',
         property_interest: 'South Oak Apartment',
@@ -575,7 +595,7 @@ export default async function handler(req, res) {
         last_name: info.last_name || '',
         phone: info.phone,
         email: info.email || '',
-        move_in_date: info.tour_date || '',
+        move_in_date: info.move_in_date || '',
         chat_transcript: session.messages
       }).eq('id', session.lead_id);
       if (updateError) {
