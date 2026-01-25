@@ -22,6 +22,11 @@ class MockSpeechRecognition {
   onend: (() => void) | null = null
   onstart: (() => void) | null = null
 
+  constructor() {
+    // Store instance globally so tests can access it
+    (global as any).mockSpeechRecognitionInstance = this
+  }
+
   start() {
     if (this.onstart) this.onstart()
   }

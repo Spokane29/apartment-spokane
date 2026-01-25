@@ -131,7 +131,7 @@ export default function EmbeddedChat() {
     intentionalStopRef.current = true
     setInterimText('')
     stopListening()
-    sendMessage(text.trim())
+    sendMessage(text.trim(), true) // true = from voice input
   }, [])
 
   const speakText = async (text: string) => {
@@ -218,7 +218,7 @@ export default function EmbeddedChat() {
     setIsSpeaking(false)
   }
 
-  const sendMessage = async (messageText?: string) => {
+  const sendMessage = async (messageText?: string, fromVoice = false) => {
     const text = messageText || input.trim()
     if (!text || isLoading) return
 
@@ -240,7 +240,8 @@ export default function EmbeddedChat() {
       const assistantMessage = data.message
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: assistantMessage }])
 
-      if (voiceEnabled && assistantMessage) {
+      // Only speak response if voice is enabled AND the user used voice input
+      if (voiceEnabled && fromVoice && assistantMessage) {
         speakText(assistantMessage)
       }
     } catch (err) {

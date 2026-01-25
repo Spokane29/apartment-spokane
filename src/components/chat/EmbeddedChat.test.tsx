@@ -205,14 +205,14 @@ describe('EmbeddedChat Voice Features', () => {
   })
 
   describe('Text-to-Speech Flow', () => {
-    it('calls voice API when message is received and voice is enabled', async () => {
+    it('does NOT call voice API for typed messages (voice only triggers on voice input)', async () => {
       render(<EmbeddedChat />)
 
       await waitFor(() => {
         expect(screen.getByText('Hello! How can I help you today?')).toBeInTheDocument()
       })
 
-      // Type and send a message
+      // Type and send a message (NOT voice input)
       const input = screen.getByPlaceholderText('Type a message...')
       fireEvent.change(input, { target: { value: 'What are the apartment prices?' } })
 
@@ -223,10 +223,11 @@ describe('EmbeddedChat Voice Features', () => {
         expect(global.fetch).toHaveBeenCalledWith('/api/chat', expect.any(Object))
       })
 
-      // After response, voice API should be called
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/voice/speak', expect.any(Object))
-      })
+      // Voice API should NOT be called for typed messages
+      const voiceCalls = vi.mocked(global.fetch).mock.calls.filter(
+        call => typeof call[0] === 'string' && call[0].includes('/api/voice/speak')
+      )
+      expect(voiceCalls.length).toBe(0)
     })
 
     it('does not call voice API when voice is disabled', async () => {
@@ -313,25 +314,30 @@ describe('EmbeddedChat Voice Features', () => {
   })
 
   describe('Speaking Indicator', () => {
-    it('shows speaking indicator when audio is playing', async () => {
+    it('does NOT call voice API for typed messages (only voice input triggers speech)', async () => {
       render(<EmbeddedChat />)
 
       await waitFor(() => {
         expect(screen.getByText('Hello! How can I help you today?')).toBeInTheDocument()
       })
 
-      // Send a message to trigger voice response
+      // Send a typed message (not voice)
       const input = screen.getByPlaceholderText('Type a message...')
       fireEvent.change(input, { target: { value: 'Hello' } })
 
       const sendButton = document.querySelector('button[type="submit"]') as HTMLButtonElement
       fireEvent.click(sendButton)
 
-      // The speaking indicator should appear when voice API responds
-      // Note: Due to the async nature of audio playback, this might need adjustment
+      // Wait for chat API to be called
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/voice/speak', expect.any(Object))
-      }, { timeout: 5000 })
+        expect(global.fetch).toHaveBeenCalledWith('/api/chat', expect.any(Object))
+      })
+
+      // Voice API should NOT be called for typed messages
+      const voiceCalls = vi.mocked(global.fetch).mock.calls.filter(
+        call => typeof call[0] === 'string' && call[0].includes('/api/voice/speak')
+      )
+      expect(voiceCalls.length).toBe(0)
     })
   })
 })
@@ -341,19 +347,26 @@ describe('Voice API - speak.js', () => {
     // These tests would ideally test the convertToSpeakable function directly
     // For now, we test via the API response behavior
 
-    it('voice API endpoint is called with correct payload', async () => {
+    it('voice API is called when message is sent via voice input', async () => {
       render(<EmbeddedChat />)
 
       await waitFor(() => {
         expect(screen.getByText('Hello! How can I help you today?')).toBeInTheDocument()
       })
 
-      const input = screen.getByPlaceholderText('Type a message...')
-      fireEvent.change(input, { target: { value: 'What is the price?' } })
+      // Start voice recognition
+      const micButton = document.querySelector('.mic-button') as HTMLButtonElement
+      fireEvent.click(micButton)
 
-      const sendButton = document.querySelector('button[type="submit"]') as HTMLButtonElement
-      fireEvent.click(sendButton)
+      // Simulate voice input result
+      await waitFor(() => {
+        const mockRecognition = (global as any).mockSpeechRecognitionInstance
+        if (mockRecognition) {
+          mockRecognition.simulateResult('What is the price?')
+        }
+      })
 
+      // Voice API should be called for voice input
       await waitFor(() => {
         const voiceCalls = vi.mocked(global.fetch).mock.calls.filter(
           call => typeof call[0] === 'string' && call[0].includes('/api/voice/speak')
@@ -365,7 +378,7 @@ describe('Voice API - speak.js', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         })
-      })
+      }, { timeout: 5000 })
     })
   })
 })
