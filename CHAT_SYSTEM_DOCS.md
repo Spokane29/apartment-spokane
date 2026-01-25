@@ -1053,6 +1053,15 @@ if (micStreamRef.current) {
 | Auto-listen dies after 2-3 exchanges | Recognition object in bad state | Recreate recognition instance each time with `createRecognition()` |
 | Auto-listen dies after 3+ exchanges | AudioContext holding mic resources | Suspend AudioContext after audio ends, re-request getUserMedia |
 | Auto-listen dies after 4-5 exchanges | Mic stream not fully released | Stop all tracks on micStreamRef before requesting new stream |
+| Mic immediately aborts (error: aborted) | React re-render during recognition start | Use refs for isListening, set state before start(), create fresh instance each click |
+
+### Session/Database Issues
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| AI re-asks for info already given | Session not saving to DB | Check Supabase UPDATE is working, look for silent errors |
+| "invalid input syntax for type boolean" | JavaScript truthy value sent to PostgreSQL | Use explicit `Boolean()` cast on all boolean fields in saveSession |
+| Phone/email lost between messages | Boolean fields failing silently | Wrap with Boolean() in saveSession payload |
 
 ### AI Issues
 
@@ -1149,6 +1158,35 @@ if (micStreamRef.current) {
 | 1.22 | - | Knowledge Base now only reads 'complete' category (admin-editable content) |
 | 1.23 | - | Removed "Browne's Addition" from fallback prompts and placeholder text |
 | 1.24 | - | Reverted from Deepgram to Web Speech API (Deepgram WebSocket auth issues in browsers) |
+| 1.25 | - | Fixed session persistence: Boolean() cast on all boolean fields to fix Supabase UPDATE failing silently |
+| 1.26 | - | Fixed AI re-asking for phone after email: root cause was boolean type error in saveSession() |
+| 1.27 | - | Voice: Simplified to basic approach - no auto-listen, mic click fills input only |
+| 1.28 | - | Voice: Added fresh recognition instance per click, refs for callbacks |
+| 1.29 | - | **CURRENT ISSUE**: Mic button starts but immediately aborts after ~2 seconds. Chrome console shows "Speech recognition error: aborted". Investigation ongoing. |
+
+---
+
+## Known Issues (Current)
+
+### Microphone Button Immediately Stops (IN PROGRESS)
+**Symptom**: Click mic button → starts listening (red) → immediately stops after ~2 seconds
+**Console Output**:
+```
+Recognition start() called
+Speech recognition started
+Speech recognition error: aborted
+Speech recognition ended
+```
+**Attempted Fixes**:
+1. Fresh recognition instance each click
+2. Set isListening state before calling start()
+3. Use refs instead of state for callbacks
+4. Removed getUserMedia pre-check that was conflicting
+
+**Possible Causes Being Investigated**:
+- React re-render causing abort
+- Something else on page grabbing microphone
+- Chrome-specific issue with Web Speech API
 
 ---
 
