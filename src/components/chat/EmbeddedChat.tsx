@@ -23,6 +23,10 @@ export default function EmbeddedChat() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hasSpokenRef = useRef(false)
 
   useEffect(() => {
     initChat()
@@ -127,7 +131,7 @@ export default function EmbeddedChat() {
     }
   }
 
-  // Start recording audio
+  // Start recording audio with silence detection
   const startRecording = async () => {
     try {
       // Stop any playing audio first
@@ -136,6 +140,16 @@ export default function EmbeddedChat() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       audioChunksRef.current = []
+      hasSpokenRef.current = false
+
+      // Set up audio analysis for silence detection
+      const audioContext = new AudioContext()
+      const analyser = audioContext.createAnalyser()
+      const source = audioContext.createMediaStreamSource(stream)
+      source.connect(analyser)
+      analyser.fftSize = 512
+      audioContextRef.current = audioContext
+      analyserRef.current = analyser
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -150,7 +164,15 @@ export default function EmbeddedChat() {
       }
 
       mediaRecorder.onstop = async () => {
-        // Clean up stream
+        // Clean up
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current)
+          silenceTimeoutRef.current = null
+        }
+        if (audioContextRef.current) {
+          audioContextRef.current.close()
+          audioContextRef.current = null
+        }
         stream.getTracks().forEach(track => track.stop())
         streamRef.current = null
 
@@ -164,10 +186,45 @@ export default function EmbeddedChat() {
         await transcribeAudio(audioBlob)
       }
 
+      // Monitor audio levels for silence detection
+      const checkSilence = () => {
+        if (!analyserRef.current || !mediaRecorderRef.current) return
+
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
+        analyserRef.current.getByteFrequencyData(dataArray)
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length
+
+        // Threshold for speech vs silence
+        const isSpeaking = average > 10
+
+        if (isSpeaking) {
+          hasSpokenRef.current = true
+          // Clear any pending silence timeout
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current)
+            silenceTimeoutRef.current = null
+          }
+        } else if (hasSpokenRef.current && !silenceTimeoutRef.current) {
+          // Start silence timeout - stop after 1.5s of silence
+          silenceTimeoutRef.current = setTimeout(() => {
+            console.log('Silence detected, stopping recording')
+            stopRecording()
+          }, 1500)
+        }
+
+        // Continue monitoring if still recording
+        if (mediaRecorderRef.current?.state === 'recording') {
+          requestAnimationFrame(checkSilence)
+        }
+      }
+
       mediaRecorderRef.current = mediaRecorder
-      mediaRecorder.start()
+      mediaRecorder.start(100) // Collect data every 100ms
       setIsRecording(true)
-      console.log('Recording started')
+      console.log('Recording started with silence detection')
+
+      // Start monitoring after a brief delay
+      setTimeout(checkSilence, 200)
     } catch (err) {
       console.error('Failed to start recording:', err)
       alert('Could not access microphone. Please check your browser permissions.')
@@ -176,9 +233,17 @@ export default function EmbeddedChat() {
 
   // Stop recording audio
   const stopRecording = () => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop()
       mediaRecorderRef.current = null
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
